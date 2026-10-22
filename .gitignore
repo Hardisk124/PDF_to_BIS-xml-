@@ -1,0 +1,17 @@
+.venv/
+.venv-win/
+__pycache__/
+*.pyc
+build/
+dist/
+schemas/
+vstup/*.pdf
+vystup/
+chyby/
+testy/vystup/
+config.toml
+UBL-2.1.zip
+samotest*.txt
+faktury_bis3.spec
+instalator.iss
+zostav.bat
