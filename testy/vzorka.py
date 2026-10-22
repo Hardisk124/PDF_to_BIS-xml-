@@ -5,7 +5,7 @@ from faktury.model import Faktura, RekapitulaciaDPH, Riadok, Strana
 
 def strana(**kw) -> Strana:
     zaklad = dict(nazov=None, ico=None, dic=None, ic_dph=None, ulica=None,
-                  mesto=None, psc=None, krajina=None, email=None, telefon=None)
+                  mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None)
     return Strana(**{**zaklad, **kw})
 
 
@@ -24,9 +24,10 @@ def faktura(**kw) -> Faktura:
                          psc="01001", krajina="SK", email="fakturacia@dodavatel.sk", telefon="+421900111222"),
         odberatel=strana(nazov="Odberatel a.s.", ico="22222222", ic_dph="SK2020222222",
                          ulica="Hlavna 1", mesto="Bratislava", psc="81101", krajina="SK"),
-        variabilny_symbol="2026001", konstantny_symbol="0308", cislo_objednavky="OBJ-77",
+        variabilny_symbol="2026001", konstantny_symbol="0308", cislo_objednavky="OBJ-77", datum_objednavky="2026-02-20",
         referencia_odberatela=None, iban="SK31 1200 0000 1987 4263 7541", bic="GIBASKBX",
-        sposob_uhrady="prevodom", poznamka=None,
+        cislo_uctu="1987426375/1200", banka="SLSP",
+        sposob_uhrady="prevodom", poznamka=None, uvodny_text=None,
         riadky=[], rekapitulacia_dph=[],
         suma_bez_dph=None, suma_dph=None, suma_s_dph=None,
         zaplatena_zaloha=None, zaokruhlenie=None, na_uhradu=None,

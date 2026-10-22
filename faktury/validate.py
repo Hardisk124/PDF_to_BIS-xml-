@@ -25,6 +25,8 @@ NS = {"cac": NS_CAC, "cbc": NS_CBC}
 
 XSD_INVOICE = cesty.zdroj("schemas", "maindoc", "UBL-Invoice-2.1.xsd")
 XSD_CREDITNOTE = cesty.zdroj("schemas", "maindoc", "UBL-CreditNote-2.1.xsd")
+XSD_POHODA = cesty.zdroj("schemas", "pohoda", "invoice.xsd")
+NS_POHODA_INV = "http://www.stormware.cz/schema/version_2/invoice.xsd"
 
 TOLERANCIA = Decimal("0.02")
 
@@ -203,6 +205,20 @@ def skontroluj_xsd(xml: bytes) -> list[str]:
     with _ZAMOK_SCHEMY:
         schema = _schema(cesta)
         if schema.validate(etree.ElementTree(root)):
+            return []
+        return [f"XSD: {chyba.message}" for chyba in schema.error_log]
+
+
+def skontroluj_pohodu(xml: bytes) -> list[str]:
+    """XSD validacia faktury v POHODA XML. Obal dataPack sa neoveruje, len faktura v nom."""
+    if not XSD_POHODA.exists():
+        return []
+    faktura = etree.fromstring(xml).find(f".//{{{NS_POHODA_INV}}}invoice")
+    if faktura is None:
+        return ["XSD: v XML nie je ziadna faktura."]
+    with _ZAMOK_SCHEMY:
+        schema = _schema(XSD_POHODA)
+        if schema.validate(etree.ElementTree(faktura)):
             return []
         return [f"XSD: {chyba.message}" for chyba in schema.error_log]
 

@@ -97,6 +97,8 @@ def vytvor_aplikaciu() -> FastAPI:
     async def zapis_nastavenia(udaje: dict, x_tajomstvo: str | None = Header(default=None)) -> JSONResponse:
         if not overene(x_tajomstvo):
             return JSONResponse({"chyba": "Neplatna poziadavka."}, status_code=403)
+        if udaje.get("vystup_ubl") is False and udaje.get("vystup_pohoda") is False:
+            return JSONResponse({"chyba": "Vyber aspon jeden vystupny format."}, status_code=400)
         # Formular neposiela vsetky polia, chybajuce sa preberu z ulozenych nastaveni.
         novy = zo_slovnika({**ploche(nacitaj()), **udaje})
         uloz(novy)
@@ -219,6 +221,7 @@ nav button.vybrane{background:var(--karta);border-color:var(--ram);color:var(--t
 #zona strong{display:block;font-size:17px;margin-bottom:5px}
 #zona span{color:var(--tlm);font-size:14px}
 input[type=file]{display:none}
+label.volba{display:flex;gap:8px;align-items:center;color:var(--text);font-size:15px;margin:0}
 .akcie{display:flex;gap:10px;align-items:center;margin:18px 0;flex-wrap:wrap}
 button.tl{font:inherit;padding:9px 18px;border-radius:8px;border:1px solid var(--ram);background:var(--karta);color:var(--text);cursor:pointer}
 button.tl.hlavne{background:var(--text);color:var(--pod);border-color:var(--text)}
@@ -277,6 +280,18 @@ input[type=text],input[type=password],select{width:100%;font:inherit;padding:8px
 <section id="panel-nastavenia" hidden>
   <form class="nastavenia" id="formular">
     <fieldset>
+      <legend>Vystupne formaty</legend>
+      <div class="mriezka">
+        <label class="volba"><input type="checkbox" id="vystup_ubl"> Peppol BIS 3 (UBL)</label>
+        <label class="volba"><input type="checkbox" id="vystup_pohoda"> POHODA XML</label>
+        <div><label for="predkontacia">Predkontacia v POHODE</label>
+             <input type="text" id="predkontacia" placeholder="napr. 602001_Prepr"></div>
+      </div>
+      <p class="napoveda">Aspon jeden format musi zostat zapnuty. Predkontacia musi existovat
+        v POHODE, prazdna sa do XML nezapise.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Peppol identifikatory</legend>
       <div class="mriezka">
         <div><label for="moj_endpoint_id">Moj EndpointID</label>
@@ -323,7 +338,9 @@ __KATEGORIE__
 const TAJOMSTVO = "__TAJOMSTVO__";
 const $ = id => document.getElementById(id);
 const POLIA = ["moj_endpoint_id","moj_endpoint_scheme","odberatel_endpoint_scheme",
-               "kategoria_nulovej_dph","zaloha_referencie","mena"];
+               "kategoria_nulovej_dph","zaloha_referencie","mena",
+               "vystup_ubl","vystup_pohoda","predkontacia"];
+const hodnota = el => el.type === "checkbox" ? el.checked : el.value;
 let subory = [], relacia = null;
 
 function panel(ktory){
@@ -337,7 +354,9 @@ $("zal-nastavenia").onclick = () => panel("nastavenia");
 
 async function nacitajNastavenia(){
   const d = await (await fetch("/api/nastavenia")).json();
-  for (const p of POLIA) if ($(p)) $(p).value = d.nastavenia[p] ?? "";
+  for (const p of POLIA) if ($(p)) {
+    if ($(p).type === "checkbox") $(p).checked = !!d.nastavenia[p]; else $(p).value = d.nastavenia[p] ?? "";
+  }
   $("cesty").textContent = `Nastavenia: ${d.cesta_config}   |   Vystupy: ${d.cesta_vystup}`;
   ukazVyzvu(d.chybajuce);
 }
@@ -354,12 +373,16 @@ function ukazVyzvu(chybajuce){
 $("formular").onsubmit = async e => {
   e.preventDefault();
   const udaje = {};
-  for (const p of POLIA) if ($(p)) udaje[p] = $(p).value;
+  for (const p of POLIA) if ($(p)) udaje[p] = hodnota($(p));
+  if (!udaje.vystup_ubl && !udaje.vystup_pohoda){
+    $("stav-nastavenia").textContent = "Vyber aspon jeden vystupny format."; return;
+  }
   const d = await (await fetch("/api/nastavenia", {
     method: "POST",
     headers: {"Content-Type": "application/json", "X-Tajomstvo": TAJOMSTVO},
     body: JSON.stringify(udaje)
   })).json();
+  if (d.chyba){ $("stav-nastavenia").textContent = d.chyba; return; }
   $("stav-nastavenia").textContent = "Ulozene.";
   setTimeout(() => $("stav-nastavenia").textContent = "", 2500);
   ukazVyzvu(d.chybajuce);
@@ -392,7 +415,7 @@ $("spusti").onclick = async () => {
   vykresli(d.vysledky);
   $("stav").textContent = `Hotovo: ${d.pocty.ok} ok, ${d.pocty.upozornenie} s upozornenim, ${d.pocty.chyba} chybnych`;
   $("spusti").disabled = false;
-  $("zip").disabled = !d.vysledky.some(v => v.vystup);
+  $("zip").disabled = !d.vysledky.some(v => v.vystup.length);
 };
 
 $("zip").onclick = () => { if (relacia) location.href = `/zip/${relacia}`; };
@@ -412,7 +435,7 @@ function vykresli(vysledky){
     r.insertCell().textContent = v.dodavatel || "";
     const s = r.insertCell(); s.className = "suma"; s.textContent = v.suma || "";
     r.insertCell().innerHTML = v.vystup
-      ? `<a href="/subor/${relacia}/${encodeURIComponent(v.vystup)}">${esc(v.vystup)}</a>` : "";
+      .map(n => `<a href="/subor/${relacia}/${encodeURIComponent(n)}">${esc(n)}</a>`).join("<br>");
   }
   $("tabulka").hidden = false;
 }

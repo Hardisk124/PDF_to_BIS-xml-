@@ -1,6 +1,7 @@
-# Faktúry → Peppol BIS Billing 3.0
+# Faktúry → Peppol BIS Billing 3.0 a POHODA
 
-Prevedie vystavené PDF faktúry na UBL 2.1 XML podľa Peppol BIS Billing 3.0.
+Prevedie vystavené PDF faktúry na UBL 2.1 XML podľa Peppol BIS Billing 3.0, na XML
+importu do účtovného programu POHODA (SK), alebo na oba naraz. Formát sa volí v nastaveniach.
 Číta jeden pevný vzor faktúry podľa súradníc stĺpcov. Beží celé lokálne,
 nič neodchádza z počítača a prevod nič nestojí.
 
@@ -15,7 +16,8 @@ Tri spôsoby spustenia nad rovnakým jadrom:
 `dist\FakturyBIS3.exe` je jeden súbor, nič sa neinštaluje. Skopíruj ho kamkoľvek a spusti.
 Nastavenia a výstupy si ukladá do `%APPDATA%\FakturyBIS3`.
 
-Pri prvom spustení otvor kartu Nastavenia a vyplň Peppol EAS kódy. Aplikácia na ne upozorní sama.
+Pri prvom spustení otvor kartu Nastavenia, vyber výstupné formáty a pri Peppol vyplň EAS kódy.
+Aplikácia na chýbajúce nastavenia upozorní sama.
 
 ### Zostavenie exe
 
@@ -60,6 +62,19 @@ len veci, ktoré na doklade nie sú.
 [zozname EAS kódov](https://docs.peppol.eu/poacc/billing/3.0/codelist/eas/)
 alebo u svojho Access Pointu. Hodnoty v priloženom `config.toml` sú len zástupné.
 
+**Výstupné formáty.** Peppol UBL ide do `FAKTURA.xml`, POHODA do `FAKTURA_pohoda.xml`.
+Aspoň jeden musí zostať zapnutý. EAS kódy potrebuje len Peppol.
+
+**POHODA XML** sa importuje cez *Súbor → Dátová komunikácia → XML import/export*. Pravidlá:
+
+- Členenie DPH a KV DPH: položka s DPH nad 0 % dostane `UD` a `A1`, položka s 0 % dostane
+  `UN` a `KN`. Hlavička dokladu má `UD`/`A1`, keď aspoň jedna položka nesie DPH.
+- Variabilný symbol sú číslice z čísla faktúry (`V26/0687` → `260687`).
+- DPH sa počíta po položkách ako v POHODE, môže sa preto od PDF líšiť o zaokrúhlenie v centoch.
+- **Predkontácia** (predvolene `602001_Prepr`) určuje, na ktoré účty POHODA doklad zaúčtuje.
+  Musí v POHODE existovať. Prázdna sa do XML nezapíše a doplní ju účtovník.
+- Text položky má v POHODE najviac 90 znakov, zvyšok popisu ide do poznámky položky.
+
 **Kategória pri nulovej DPH** rozhoduje, ako sa označí oslobodené plnenie. Predvolené `AE`
 je prenesenie daňovej povinnosti, čo zodpovedá vete o článkoch 193 až 196 na faktúre.
 Ak ti účtovník povie inak, prepni na `K` pri dodaní do EÚ alebo `G` pri vývoze.
@@ -87,7 +102,7 @@ plus je tam `suhrn.json` s prehľadom celej dávky.
 ## Ako to funguje
 
 ```
-PDF → slová so súradnicami (pdfplumber) → čítanie podľa stĺpcov → UBL XML → validácia → zápis
+PDF → slová so súradnicami (pdfplumber) → čítanie podľa stĺpcov → UBL a/alebo POHODA XML → validácia → zápis
 ```
 
 Faktúra sa nečíta z plochého textu, ale podľa polohy slov na strane. Ploché čítanie by
@@ -98,7 +113,8 @@ vlastných objednávok vľavo.
 |---|---|
 | `faktury/sablona.py` | Čítanie faktúry podľa súradníc. Tu sa upravuje, keď sa zmení vzor |
 | `faktury/model.py` | Štruktúra faktúry |
-| `faktury/ubl.py` | Normalizácia súm a dátumov, stavba XML |
+| `faktury/ubl.py` | Normalizácia súm a dátumov, stavba Peppol UBL XML |
+| `faktury/pohoda.py` | Stavba XML importu do POHODY |
 | `faktury/validate.py` | Obchodné pravidlá a XSD |
 | `faktury/pipeline.py` | Spojenie krokov, ošetrenie chýb |
 | `faktury/server.py` | HTTP server a stránka, spoločná pre okno aj prehliadač |
@@ -122,7 +138,8 @@ with pdfplumber.open('vstup/faktura.pdf') as pdf:
 
 Dve úrovne. Vstavané obchodné pravidlá EN 16931 a Peppol kontrolujú súčty riadkov proti
 základu dane, rekapituláciu DPH, povinné polia a kategórie DPH. XSD kontrola overí
-štruktúru proti oficiálnej UBL 2.1 schéme, ak sú schémy stiahnuté.
+štruktúru proti oficiálnej UBL 2.1 schéme, ak sú schémy stiahnuté. POHODA XML sa overuje
+proti XSD schéme faktúry od Stormware (`schemas/pohoda/`, sťahuje ju tiež `stiahni_schemy.py`).
 
 **Toto nenahrádza oficiálny Peppol Schematron.** Ten beží nad XSLT 2.0, čo Python sám
 nevie. Kým budeš XML posielať prvýkrát, prežeň dávku cez
@@ -158,4 +175,5 @@ Aplikácia nemá konzolu, takže si píše dva denníky do `%APPDATA%\FakturyBIS
 ./.venv/bin/python testy/test_prevod.py      # jadro: Faktura → UBL → validácia
 ./.venv/bin/python testy/test_sablona.py     # čítanie skutočných PDF vrátane očakávaných hodnôt
 ./.venv/bin/python testy/test_server.py      # server: nahranie, sťahovanie, ZIP, ochrany
+./.venv/bin/python testy/test_pohoda.py      # POHODA: členenie DPH, XSD, porovnanie so vzorom z POHODY
 ```

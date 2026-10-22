@@ -75,6 +75,9 @@ def main() -> int:
         over("striktna validacia zostala vypnuta",
              klient.get("/api/nastavenia").json()["nastavenia"]["striktna_validacia"], False)
 
+        over("bez formatu sa neulozi", klient.post("/api/nastavenia", headers=hlavicky,
+             json={"vystup_ubl": False, "vystup_pohoda": False}).status_code, 400)
+
         # Nastavenia sa ulozia a nacitaju spat.
         ulozenie = klient.post("/api/nastavenia", headers=hlavicky, json={
             "moj_endpoint_scheme": "0158", "odberatel_endpoint_scheme": "0158",
@@ -94,7 +97,8 @@ def main() -> int:
         over("kazda ma XML", all(v["vystup"] for v in data["vysledky"]), True)
 
         relacia = data["relacia"]
-        prve = data["vysledky"][0]["vystup"]
+        over("UBL aj POHODA pre kazdu", all(len(v["vystup"]) == 2 for v in data["vysledky"]), True)
+        prve = data["vysledky"][0]["vystup"][0]
         stiahnute = klient.get(f"/subor/{relacia}/{prve}")
         over("stiahnutie XML", stiahnute.status_code, 200)
         over("je to Invoice", b"<Invoice" in stiahnute.content, True)

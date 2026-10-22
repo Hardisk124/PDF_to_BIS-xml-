@@ -165,7 +165,7 @@ def main() -> int:
 
         vysledok = spracuj_subor(cesta, CFG)
         stav = "OK" if not vysledok.chyby else "ZLYHALO"
-        print(f"    prevod do XML: {stav} ({len(vysledok.xml or b'')} B, {vysledok.cislo_faktury})")
+        print(f"    prevod do XML: {stav} ({', '.join(v.nazov for v in vysledok.vystupy)}, {vysledok.cislo_faktury})")
         for c in vysledok.chyby:
             print("     chyba:", c)
         zlyhalo += len(vysledok.chyby)

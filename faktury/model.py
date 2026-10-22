@@ -41,6 +41,7 @@ class Strana(BaseModel):
     )
     email: Optional[str] = Field(description="Kontaktny e-mail.")
     telefon: Optional[str] = Field(description="Kontaktny telefon.")
+    web: Optional[str] = Field(description="Webova stranka.")
 
 
 class Riadok(BaseModel):
@@ -94,16 +95,20 @@ class Faktura(BaseModel):
     variabilny_symbol: Optional[str] = Field(description="Variabilny symbol platby.")
     konstantny_symbol: Optional[str] = Field(description="Konstantny symbol platby.")
     cislo_objednavky: Optional[str] = Field(description="Cislo objednavky odberatela, ak je uvedene.")
+    datum_objednavky: Optional[str] = Field(description="Datum objednavky vo formate YYYY-MM-DD.")
     referencia_odberatela: Optional[str] = Field(
         description="Ina referencia pozadovana odberatelom, napriklad cislo zmluvy alebo stredisko."
     )
 
     iban: Optional[str] = Field(description="IBAN uctu dodavatela bez medzier.")
     bic: Optional[str] = Field(description="BIC alebo SWIFT banky dodavatela.")
+    cislo_uctu: Optional[str] = Field(description="Cislo uctu v tvare cislo/kod banky, napriklad 4005114339/7500.")
+    banka: Optional[str] = Field(description="Skratka banky dodavatela, napriklad CSOB.")
     sposob_uhrady: Optional[str] = Field(
         description="Sposob uhrady tak, ako je na fakture, napriklad prevodom, hotovost, karta, dobierka, inkaso."
     )
     poznamka: Optional[str] = Field(description="Doplnujuca poznamka z faktury, ktora patri k celemu dokladu.")
+    uvodny_text: Optional[str] = Field(description="Text nad polozkami, napriklad 'Fakturujeme Vam prepravy:'.")
 
     riadky: list[Riadok] = Field(description="Vsetky fakturovane riadky v poradi, v akom su na fakture.")
     rekapitulacia_dph: list[RekapitulaciaDPH] = Field(

@@ -1,4 +1,4 @@
-"""Spojenie krokov: PDF -> text -> extrakcia -> UBL -> validacia -> zapis."""
+"""Spojenie krokov: PDF -> text -> extrakcia -> UBL a/alebo POHODA -> validacia -> zapis."""
 
 from __future__ import annotations
 
@@ -10,23 +10,40 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import Config
+from .pohoda import do_pohody
 from .sablona import ChybaSablony, precitaj
 from .ubl import ChybaPrevodu, do_ubl
-from .validate import skontroluj, skontroluj_xsd, xsd_dostupne
+from .validate import XSD_INVOICE, XSD_POHODA, skontroluj, skontroluj_pohodu, skontroluj_xsd
+
+# Format: (nazov, prevod, kontrola, schema, pripona suboru)
+FORMATY = {
+    "vystup_ubl": ("UBL", do_ubl, lambda xml: skontroluj(xml) + skontroluj_xsd(xml), XSD_INVOICE, ".xml"),
+    "vystup_pohoda": ("POHODA", do_pohody, skontroluj_pohodu, XSD_POHODA, "_pohoda.xml"),
+}
+
+
+@dataclass
+class Vystup:
+    nazov: str
+    xml: bytes
+    platne: bool
+    cesta: Path | None = None
 
 
 @dataclass
 class Vysledok:
     subor: Path
     ok: bool
-    xml: bytes | None = None
-    nazov_xml: str = ""
+    vystupy: list[Vystup] = field(default_factory=list)
     cislo_faktury: str = ""
     dodavatel: str = ""
     suma: str = ""
     upozornenia: list[str] = field(default_factory=list)
     chyby: list[str] = field(default_factory=list)
-    cesta_vystupu: Path | None = None
+
+    @property
+    def zapisane(self) -> list[Path]:
+        return [v.cesta for v in self.vystupy if v.cesta]
 
     @property
     def stav(self) -> str:
@@ -45,7 +62,7 @@ class Vysledok:
             "cislo_faktury": self.cislo_faktury,
             "dodavatel": self.dodavatel,
             "suma": self.suma,
-            "vystup": self.cesta_vystupu.name if self.cesta_vystupu else None,
+            "vystup": [c.name for c in self.zapisane],
             "chyby": self.chyby,
             "upozornenia": self.upozornenia,
         }
@@ -62,33 +79,36 @@ def spracuj_subor(cesta: Path, cfg: Config) -> Vysledok:
     vysledok = Vysledok(subor=cesta, ok=False)
     try:
         faktura = precitaj(cesta)
-        prevod = do_ubl(faktura, cfg)
-
-        vysledok.xml = prevod.xml
-        vysledok.upozornenia.extend(prevod.upozornenia)
         vysledok.cislo_faktury = (faktura.cislo_faktury or "").strip()
         vysledok.dodavatel = (faktura.dodavatel.nazov or "").strip()
         vysledok.suma = (faktura.na_uhradu or faktura.suma_s_dph or "").strip()
-        vysledok.nazov_xml = bezpecny_nazov(vysledok.cislo_faktury, cesta.stem) + ".xml"
+        zaklad_nazvu = bezpecny_nazov(vysledok.cislo_faktury, cesta.stem)
 
-        vysledok.chyby.extend(skontroluj(prevod.xml))
-        if xsd_dostupne():
-            vysledok.chyby.extend(skontroluj_xsd(prevod.xml))
-        else:
-            # Bez schem prebehnu len obchodne pravidla. Mlcat by znamenalo
-            # tvarit sa, ze XML je overene viac, nez v skutocnosti je.
-            vysledok.upozornenia.append(
-                "UBL schemy nie su stiahnute, struktura XML sa neoverila. "
-                "Spusti stiahni_schemy.py."
-            )
-        vysledok.ok = True
+        for prepinac, (nazov, prevod, kontrola, schema, pripona) in FORMATY.items():
+            if not getattr(cfg.nastavenia, prepinac):
+                continue
+            try:
+                prevedene = prevod(faktura, cfg)
+            except ChybaPrevodu as chyba:
+                vysledok.chyby.append(f"{nazov}: {chyba}")
+                continue
+            chyby = kontrola(prevedene.xml)
+            vysledok.upozornenia.extend(f"{nazov}: {u}" for u in prevedene.upozornenia)
+            vysledok.chyby.extend(f"{nazov}: {c}" for c in chyby)
+            if not schema.exists():
+                # Bez schem prebehnu len obchodne pravidla. Mlcat by znamenalo
+                # tvarit sa, ze XML je overene viac, nez v skutocnosti je.
+                vysledok.upozornenia.append(
+                    f"{nazov}: XSD schemy nie su stiahnute, struktura XML sa neoverila. "
+                    "Spusti stiahni_schemy.py."
+                )
+            vysledok.vystupy.append(Vystup(zaklad_nazvu + pripona, prevedene.xml, platne=not chyby))
+        vysledok.ok = bool(vysledok.vystupy)
 
     except ChybaSablony as chyba:
         vysledok.chyby.append(
             f"PDF nezodpoveda ocakavanemu vzoru faktury: {chyba}"
         )
-    except ChybaPrevodu as chyba:
-        vysledok.chyby.append(str(chyba))
     except Exception as chyba:  # noqa: BLE001 - davkove spracovanie nesmie spadnut na jednom subore
         vysledok.chyby.append(f"{type(chyba).__name__}: {chyba}")
         vysledok.upozornenia.append(traceback.format_exc(limit=3))
@@ -106,17 +126,16 @@ def zapis(vysledok: Vysledok, priecinok_vystup: Path, priecinok_chyby: Path, str
     priecinok_vystup.mkdir(parents=True, exist_ok=True)
     priecinok_chyby.mkdir(parents=True, exist_ok=True)
 
-    zapisat = vysledok.xml is not None and (not vysledok.chyby or not striktne)
-
-    if zapisat:
-        assert vysledok.xml is not None  # zarucene podmienkou vyssie
-        cielovy = priecinok_vystup / vysledok.nazov_xml
+    for vystup in vysledok.vystupy:
+        if striktne and not vystup.platne:
+            continue
+        cielovy = priecinok_vystup / vystup.nazov
         poradie = 2
         while cielovy.exists():
-            cielovy = priecinok_vystup / f"{Path(vysledok.nazov_xml).stem}_{poradie}.xml"
+            cielovy = priecinok_vystup / f"{Path(vystup.nazov).stem}_{poradie}.xml"
             poradie += 1
-        cielovy.write_bytes(vysledok.xml)
-        vysledok.cesta_vystupu = cielovy
+        cielovy.write_bytes(vystup.xml)
+        vystup.cesta = cielovy
 
     if vysledok.chyby or not vysledok.ok:
         protokol = priecinok_chyby / f"{vysledok.subor.stem}.txt"
@@ -124,7 +143,7 @@ def zapis(vysledok: Vysledok, priecinok_vystup: Path, priecinok_chyby: Path, str
             f"Subor:  {vysledok.subor}",
             f"Cas:    {datetime.now().isoformat(timespec='seconds')}",
             f"Stav:   {vysledok.stav}",
-            f"Vystup: {vysledok.cesta_vystupu or 'nezapisane'}",
+            f"Vystup: {', '.join(map(str, vysledok.zapisane)) or 'nezapisane'}",
             "",
             "CHYBY:",
             *(f"  - {c}" for c in vysledok.chyby or ["ziadne"]),

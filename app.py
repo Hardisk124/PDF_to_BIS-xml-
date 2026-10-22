@@ -133,11 +133,12 @@ def samotest(cesta_protokolu: Path) -> int:
         """Postavi malu fakturu, prevedie ju a overi validaciu vratane XSD."""
         from faktury.config import nacitaj
         from faktury.model import Faktura, RekapitulaciaDPH, Riadok, Strana
+        from faktury.pohoda import do_pohody
         from faktury.ubl import do_ubl
-        from faktury.validate import skontroluj, skontroluj_xsd
+        from faktury.validate import XSD_POHODA, skontroluj, skontroluj_pohodu, skontroluj_xsd
 
         prazdna = dict(nazov=None, ico=None, dic=None, ic_dph=None, ulica=None,
-                       mesto=None, psc=None, krajina=None, email=None, telefon=None)
+                       mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None)
         skuska = Faktura(
             cislo_faktury="TEST-1", datum_vystavenia="2026-01-15", datum_splatnosti="2026-01-29",
             datum_dodania=None, typ_dokladu="380", mena="EUR",
@@ -147,9 +148,9 @@ def samotest(cesta_protokolu: Path) -> int:
             odberatel=Strana(**{**prazdna, "nazov": "Odberatel s.r.o.", "ico": "22222222",
                                 "ic_dph": "SK2020222222", "ulica": "Hlavna 1", "mesto": "Bratislava",
                                 "psc": "81101", "krajina": "SK"}),
-            variabilny_symbol="1", konstantny_symbol=None, cislo_objednavky="OBJ-1",
-            referencia_odberatela=None, iban="SK3112000000198742637541", bic=None,
-            sposob_uhrady="prevodom", poznamka=None,
+            variabilny_symbol="1", konstantny_symbol=None, cislo_objednavky="OBJ-1", datum_objednavky=None,
+            referencia_odberatela=None, iban="SK3112000000198742637541", bic=None, cislo_uctu=None, banka=None,
+            sposob_uhrady="prevodom", poznamka=None, uvodny_text=None,
             riadky=[Riadok(poradie=1, nazov="Polozka", popis=None, mnozstvo="1", jednotka="ks",
                            jednotkova_cena="100.00", suma_bez_dph="100.00", sadzba_dph="23",
                            kategoria_dph="S")],
@@ -161,9 +162,13 @@ def samotest(cesta_protokolu: Path) -> int:
         vysledok = do_ubl(skuska, nacitaj())
         chyby = [c for c in skontroluj(vysledok.xml) + skontroluj_xsd(vysledok.xml)
                  if "EndpointID" not in c and "referencia" not in c]
+        if not XSD_POHODA.exists():
+            raise FileNotFoundError(f"POHODA schema nenajdena na {XSD_POHODA}")
+        pohoda = do_pohody(skuska, nacitaj())
+        chyby += [f"POHODA: {c}" for c in skontroluj_pohodu(pohoda.xml)]
         if chyby:
             raise ValueError("; ".join(chyby))
-        return f"XML {len(vysledok.xml)} B, validacia presla"
+        return f"UBL {len(vysledok.xml)} B, POHODA {len(pohoda.xml)} B, validacia presla"
 
     skus("prevod a validacia", prevod_a_validacia)
 

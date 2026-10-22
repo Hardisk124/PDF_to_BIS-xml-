@@ -46,6 +46,11 @@ class Nastavenia:
     # Predvolene zapnute: faktura, ktora neprejde validaciou, sa nema dostat
     # do vystupu, lebo odtial ide zakaznikovi.
     striktna_validacia: bool = True
+    # Ktore XML vytvarat. Aspon jeden format musi zostat zapnuty.
+    vystup_ubl: bool = True
+    vystup_pohoda: bool = True
+    # Predkontacia v POHODE, napriklad 602001_Prepr. Prazdna sa do XML nezapise.
+    predkontacia: str = "602001_Prepr"
 
 
 @dataclass(frozen=True)
@@ -60,9 +65,10 @@ class Config:
         chyba = []
         if self.problem:
             chyba.append(self.problem)
-        if not self.peppol.moj_endpoint_scheme:
+        # EAS kody potrebuje len Peppol, POHODA ich nepouziva.
+        if self.nastavenia.vystup_ubl and not self.peppol.moj_endpoint_scheme:
             chyba.append("EAS kod tvojej firmy")
-        if not self.peppol.odberatel_endpoint_scheme:
+        if self.nastavenia.vystup_ubl and not self.peppol.odberatel_endpoint_scheme:
             chyba.append("EAS kod odberatela")
         return chyba
 
@@ -134,6 +140,8 @@ def zo_slovnika(udaje: dict) -> Config:
         return _ocisti(str(udaje.get(kluc, inak)))
 
     kategoria = txt("kategoria_nulovej_dph", "AE").upper()
+    vystup_ubl = bool(udaje.get("vystup_ubl", True))
+    vystup_pohoda = bool(udaje.get("vystup_pohoda", True))
     return Config(
         peppol=Peppol(
             moj_endpoint_id=txt("moj_endpoint_id"),
@@ -145,5 +153,9 @@ def zo_slovnika(udaje: dict) -> Config:
             kategoria_nulovej_dph=kategoria if kategoria in KATEGORIE_NULOVEJ_DPH else "AE",
             zaloha_referencie=txt("zaloha_referencie", "cislo_faktury"),
             striktna_validacia=bool(udaje.get("striktna_validacia", True)),
+            # Bez formatu by sa nic nevytvorilo, preto vtedy ostava zapnuty UBL.
+            vystup_ubl=vystup_ubl or not vystup_pohoda,
+            vystup_pohoda=vystup_pohoda,
+            predkontacia=txt("predkontacia", "602001_Prepr"),
         ),
     )

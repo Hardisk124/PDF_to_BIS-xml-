@@ -408,6 +408,20 @@ def priprav_riadky(
     return pripravene
 
 
+def skontroluj_sucet(sucet_riadkov: Decimal, zaklad_celkom: Decimal) -> None:
+    """BR-CO-10: suma riadkov sa musi rovnat zakladu dane na fakture.
+
+    Ked sa lisi, nieco sa precitalo zle alebo sa stratil riadok. Tichou opravou by
+    vznikla faktura s inou sumou, nez ma papierovy doklad, preto sa prevod zastavi.
+    """
+    if abs(sucet_riadkov - zaklad_celkom) > DVE:
+        raise ChybaPrevodu(
+            f"Sucet fakturovanych riadkov {d2(sucet_riadkov)} sa nezhoduje so zakladom dane "
+            f"na fakture {d2(zaklad_celkom)}. Rozdiel je {d2(abs(sucet_riadkov - zaklad_celkom))}. "
+            "Niektory riadok sa precital zle alebo chyba, XML sa preto nevytvorilo."
+        )
+
+
 # ---------------------------------------------------------------- hlavny prevod
 
 
@@ -457,15 +471,7 @@ def do_ubl(faktura: Faktura, cfg: Config) -> Vysledok:
     if na_uhradu is None:
         na_uhradu = s_dph_celkom - zaloha + zaokruhlenie
 
-    # BR-CO-10: suma riadkov sa musi rovnat BT-106. Ked sa lisi, nieco sa precitalo zle
-    # alebo sa stratil riadok. Tichou opravou by vznikla faktura s inou sumou, nez ma
-    # papierovy doklad, preto sa prevod zastavi.
-    if abs(sucet_riadkov - zaklad_celkom) > DVE:
-        raise ChybaPrevodu(
-            f"Sucet fakturovanych riadkov {d2(sucet_riadkov)} sa nezhoduje so zakladom dane "
-            f"na fakture {d2(zaklad_celkom)}. Rozdiel je {d2(abs(sucet_riadkov - zaklad_celkom))}. "
-            "Niektory riadok sa precital zle alebo chyba, XML sa preto nevytvorilo."
-        )
+    skontroluj_sucet(sucet_riadkov, zaklad_celkom)
 
     root = etree.Element(
         f"{{{ns_root}}}{nazov_root}",

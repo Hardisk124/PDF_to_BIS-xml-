@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Stiahne UBL 2.1 XSD schemy od OASIS a rozbali ich do priecinka schemas/.
+"""Stiahne UBL 2.1 XSD schemy od OASIS a schemy POHODA od Stormware do priecinka schemas/.
 
 Bez nich bezi len kontrola obchodnych pravidiel. So schemami sa navyse overi,
-ze XML zodpoveda UBL strukture.
+ze XML zodpoveda strukture UBL aj POHODA.
 """
 
 from __future__ import annotations
@@ -18,6 +18,24 @@ CIEL = KOREN / "schemas"
 ZDROJ = "http://docs.oasis-open.org/ubl/os-UBL-2.1/UBL-2.1.zip"
 # Lokalna kopia archivu sa pouzije, ak existuje, aby sa nesahovalo opakovane.
 LOKALNY = KOREN / "UBL-2.1.zip"
+# Schema faktury POHODA a vsetko, co importuje.
+ZDROJ_POHODA = "https://www.stormware.cz/schema/version_2/"
+SCHEMY_POHODA = ("invoice.xsd", "type.xsd", "documentresponse.xsd", "print.xsd", "filter.xsd")
+
+
+def stiahni_pohodu() -> int:
+    ciel = CIEL / "pohoda"
+    ciel.mkdir(parents=True, exist_ok=True)
+    for nazov in SCHEMY_POHODA:
+        print(f"Stahujem {ZDROJ_POHODA}{nazov} ...")
+        try:
+            with urllib.request.urlopen(ZDROJ_POHODA + nazov, timeout=60) as odpoved:
+                (ciel / nazov).write_bytes(odpoved.read())
+        except Exception as chyba:
+            print(f"Stiahnutie zlyhalo: {chyba}", file=sys.stderr)
+            return 1
+    print(f"Hotovo, {len(SCHEMY_POHODA)} schem POHODA v {ciel}.")
+    return 0
 
 
 def main() -> int:
@@ -53,7 +71,7 @@ def main() -> int:
             pocet += 1
 
     print(f"Hotovo, {pocet} schem v {CIEL}.")
-    return 0
+    return stiahni_pohodu()
 
 
 if __name__ == "__main__":

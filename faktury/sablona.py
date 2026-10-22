@@ -237,7 +237,7 @@ def _dodavatel(riadky: list[RiadokStrany]) -> Strana:
     return Strana(
         nazov=nazov, ico=ico, dic=dic, ic_dph=ic_dph,
         ulica=ulica, mesto=mesto, psc=psc, krajina=krajina,
-        email=None, telefon=None,
+        email=None, telefon=None, web=None,
     )
 
 
@@ -280,12 +280,12 @@ def _odberatel(riadky: list[RiadokStrany]) -> Strana:
     return Strana(
         nazov=nazov, ico=ico, dic=dic, ic_dph=ic_dph,
         ulica=ulica, mesto=mesto, psc=psc, krajina=krajina,
-        email=None, telefon=None,
+        email=None, telefon=None, web=None,
     )
 
 
-def _polozky(riadky: list[RiadokStrany], prva_strana: bool) -> tuple[list[Riadok], str | None]:
-    """Vrati fakturovane riadky jednej strany a kod meny.
+def _polozky(riadky: list[RiadokStrany], prva_strana: bool) -> tuple[list[Riadok], str | None, str | None]:
+    """Vrati fakturovane riadky jednej strany, kod meny a uvodny text nad polozkami.
 
     Na prvej strane musi byt hlavicka tabulky, inak to nie je ocakavany vzor.
     Na dalsich stranach hlavicka ani suhrn byt nemusia, polozky sa poznaju
@@ -302,6 +302,7 @@ def _polozky(riadky: list[RiadokStrany], prva_strana: bool) -> tuple[list[Riadok
     mena = None
     polozky: list[Riadok] = []
     popisy: list[list[str]] = []
+    uvod: list[str] = []
 
     for riadok in riadky[od:do]:
         cena = [s for s in riadok.slova if X_CENA[0] <= s.x0 < X_CENA[1] and _je_cislo(s.text)]
@@ -335,9 +336,9 @@ def _polozky(riadky: list[RiadokStrany], prva_strana: bool) -> tuple[list[Riadok
                 )
             )
             popisy.append([riadok.text(0, X_POPIS_DO)])
-        elif polozky and riadok.text(0, X_POPIS_DO) and not riadok.text(X_POPIS_DO):
-            # Pokracovanie popisu predchadzajucej polozky na dalsom riadku.
-            popisy[-1].append(riadok.text(0, X_POPIS_DO))
+        elif riadok.text(0, X_POPIS_DO) and not riadok.text(X_POPIS_DO):
+            # Pred prvou polozkou je uvodny text, potom pokracovanie popisu polozky.
+            (popisy[-1] if polozky else uvod).append(riadok.text(0, X_POPIS_DO))
 
     if prva_strana and not polozky:
         raise ChybaSablony("V tabulke poloziek nie je ani jeden citatelny riadok.")
@@ -347,7 +348,7 @@ def _polozky(riadky: list[RiadokStrany], prva_strana: bool) -> tuple[list[Riadok
         polozka.nazov = cely[:200] or "Polozka"
         polozka.popis = cely if len(cely) > 200 else None
 
-    return polozky, mena
+    return polozky, mena, " ".join(uvod) or None
 
 
 def _rekapitulacia(riadky: list[RiadokStrany]) -> tuple[list[RekapitulaciaDPH], dict[str, str | None]]:
@@ -439,13 +440,15 @@ def precitaj(cesta: Path) -> Faktura:
         raise ChybaSablony("Na fakture sa nenaslo cislo faktury.")
 
     polozky: list[Riadok] = []
-    mena = None
+    mena = uvodny_text = None
     for index, strana in enumerate(strany):
-        cast, mena_strany = _polozky(strana, prva_strana=index == 0)
+        cast, mena_strany, uvod_strany = _polozky(strana, prva_strana=index == 0)
         for polozka in cast:
             polozka.poradie = len(polozky) + 1
             polozky.append(polozka)
         mena = mena or mena_strany
+        if index == 0:
+            uvodny_text = uvod_strany
     if not polozky:
         raise ChybaSablony("Na fakture sa nenasla ani jedna polozka.")
 
@@ -454,6 +457,11 @@ def precitaj(cesta: Path) -> Faktura:
 
     s_dph = _suma(_za(posledna, "Cena s DPH celkom") or "")
     na_uhradu = _suma(_za(posledna, "Čiastka k úhrade") or "")
+
+    # "Banka:" je zlepena so skratkou banky do jedneho slova, napriklad "Banka:ČSOB".
+    index_banky = _najdi(hlavicka, "Banka:")
+    m = re.search(r"Banka:\s*(\S+)", hlavicka[index_banky].text(0, 300.0)) if index_banky is not None else None
+    banka = m.group(1) if m else None
 
     return Faktura(
         cislo_faktury=cislo,
@@ -465,16 +473,21 @@ def precitaj(cesta: Path) -> Faktura:
         dodavatel=_dodavatel(hlavicka).model_copy(update={
             "email": _za(posledna, "E-mail:", 300.0),
             "telefon": _za(posledna, "Telefón:", 300.0),
+            "web": _za(posledna, "Web:", 300.0),
         }),
         odberatel=_odberatel(hlavicka),
         variabilny_symbol=None,
         konstantny_symbol=_za(hlavicka, "Konšt. symbol:"),
         cislo_objednavky=_za(hlavicka, "Objednávka číslo:"),
+        datum_objednavky=_za(hlavicka, "zo dňa:"),
         referencia_odberatela=None,
         iban=_za(hlavicka, "IBAN:", 300.0),
         bic=_za(hlavicka, "BIC:", 300.0),
+        cislo_uctu=_za(hlavicka, "Účet:", 300.0),
+        banka=banka,
         sposob_uhrady=_za(hlavicka, "Forma úhrady:"),
         poznamka=dovod,
+        uvodny_text=uvodny_text,
         riadky=polozky,
         rekapitulacia_dph=[
             RekapitulaciaDPH(
