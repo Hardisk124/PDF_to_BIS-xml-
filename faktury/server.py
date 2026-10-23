@@ -284,11 +284,8 @@ input[type=text],input[type=password],select{width:100%;font:inherit;padding:8px
       <div class="mriezka">
         <label class="volba"><input type="checkbox" id="vystup_ubl"> Peppol BIS 3 (UBL)</label>
         <label class="volba"><input type="checkbox" id="vystup_pohoda"> POHODA XML</label>
-        <div><label for="predkontacia">Predkontacia v POHODE</label>
-             <input type="text" id="predkontacia" placeholder="napr. 602001_Prepr"></div>
       </div>
-      <p class="napoveda">Aspon jeden format musi zostat zapnuty. Predkontacia musi existovat
-        v POHODE, prazdna sa do XML nezapise.</p>
+      <p class="napoveda">Aspon jeden format musi zostat zapnuty.</p>
     </fieldset>
 
     <fieldset>
@@ -339,7 +336,7 @@ const TAJOMSTVO = "__TAJOMSTVO__";
 const $ = id => document.getElementById(id);
 const POLIA = ["moj_endpoint_id","moj_endpoint_scheme","odberatel_endpoint_scheme",
                "kategoria_nulovej_dph","zaloha_referencie","mena",
-               "vystup_ubl","vystup_pohoda","predkontacia"];
+               "vystup_ubl","vystup_pohoda"];
 const hodnota = el => el.type === "checkbox" ? el.checked : el.value;
 let subory = [], relacia = null;
 

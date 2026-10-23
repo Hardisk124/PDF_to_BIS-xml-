@@ -25,14 +25,12 @@ NS = {"inv": NS_INV, "typ": NS_TYP}
 
 # Rozdiely voci vzoru, ktore su zamerne:
 #   - liquidation, lock2, markRecord su stav zaznamu v POHODE, import ich nepotrebuje,
-#   - kontakt, symbol a nazvy su tak, ako su na PDF (vzor ich ma z adresara POHODY),
-#   - polozky maju navyse vlastne clenenie DPH.
+#   - kontakt, symbol a nazvy su tak, ako su na PDF (vzor ich ma z adresara POHODY).
 IGNOROVANE = {
     "invoiceHeader/liquidation/amountHome", "invoiceHeader/lock2", "invoiceHeader/markRecord",
     "invoiceHeader/symConst", "invoiceHeader/myIdentity/address/phone",
     "invoiceHeader/myIdentity/address/email", "invoiceHeader/partnerIdentity/address/company",
     "invoiceDetail/invoiceItem/text",
-    "invoiceDetail/invoiceItem/classificationVAT/ids", "invoiceDetail/invoiceItem/classificationKVDPH/ids",
 }
 
 
@@ -58,20 +56,16 @@ def hodnoty(xml_root) -> dict[str, list[str]]:
     return vysledok
 
 
-def clenenie(xml: bytes) -> tuple[tuple[str, str], list[tuple[str, str]]]:
-    root = etree.fromstring(xml)
-
-    def par(uzol) -> tuple[str, str]:
-        return (uzol.findtext("inv:classificationVAT/typ:ids", namespaces=NS),
-                uzol.findtext("inv:classificationKVDPH/typ:ids", namespaces=NS))
-
-    return par(root.find(".//inv:invoiceHeader", NS)), [par(p) for p in root.findall(".//inv:invoiceItem", NS)]
+def clenenie(xml: bytes) -> tuple[str, str]:
+    hlavicka = etree.fromstring(xml).find(".//inv:invoiceHeader", NS)
+    return (hlavicka.findtext("inv:classificationVAT/typ:ids", namespaces=NS),
+            hlavicka.findtext("inv:classificationKVDPH/typ:ids", namespaces=NS))
 
 
 def main() -> int:
     chyby: list[str] = []
 
-    # Clenenie: polozka s DPH UD/A1, bez DPH UN/KN, hlavicka UD/A1 ak aspon jedna ma DPH.
+    # Clenenie: faktura s DPH UD/A1, bez DPH UN/KN. Zmiesane sadzby sa nemaju stat, preto upozornenie.
     zmiesana = faktura(
         riadky=[riadok(poradie=1, nazov="Preprava SK", mnozstvo="1", jednotkova_cena="100.00",
                        suma_bez_dph="100.00", sadzba_dph="23"),
@@ -79,10 +73,12 @@ def main() -> int:
                        suma_bez_dph="50.00", sadzba_dph="0")],
         suma_bez_dph="150.00", suma_dph="23.00", suma_s_dph="173.00", na_uhradu="173.00",
     )
-    xml = do_pohody(zmiesana, Config()).xml
-    if clenenie(xml) != (("UD", "A1"), [("UD", "A1"), ("UN", "KN")]):
-        chyby.append(f"zmiesana faktura: clenenie {clenenie(xml)}")
-    chyby += [f"zmiesana faktura: {c}" for c in skontroluj_pohodu(xml)]
+    vysledok = do_pohody(zmiesana, Config())
+    if clenenie(vysledok.xml) != ("UD", "A1"):
+        chyby.append(f"zmiesana faktura: clenenie {clenenie(vysledok.xml)}")
+    if not any("s DPH aj bez DPH" in u for u in vysledok.upozornenia):
+        chyby.append("zmiesana faktura: chyba upozornenie na zmiesane sadzby")
+    chyby += [f"zmiesana faktura: {c}" for c in skontroluj_pohodu(vysledok.xml)]
 
     bez_dph = faktura(
         riadky=[riadok(poradie=1, nazov="Preprava EU", mnozstvo="1", jednotkova_cena="50.00",
@@ -90,7 +86,7 @@ def main() -> int:
         suma_bez_dph="50.00", suma_dph="0.00", suma_s_dph="50.00", na_uhradu="50.00",
     )
     xml = do_pohody(bez_dph, Config()).xml
-    if clenenie(xml) != (("UN", "KN"), [("UN", "KN")]):
+    if clenenie(xml) != ("UN", "KN"):
         chyby.append(f"faktura bez DPH: clenenie {clenenie(xml)}")
 
     for vstup, ocakavane in [("Obuvnícka 3", ("Obuvnícka", "3")), ("Jasná 724/16", ("Jasná", "724/16")),

@@ -24,9 +24,11 @@ NS_TYP = "http://www.stormware.cz/schema/version_2/type.xsd"
 SADZBY = {Decimal("23"): "high", Decimal("19"): "low", Decimal("5"): "third", NULA: "none"}
 SUHRN = {"low": "priceLow", "high": "priceHigh", "third": "price3"}
 
-# Clenenie DPH a clenenie KV DPH podla toho, ci polozka nesie dan.
+# Clenenie DPH a clenenie KV DPH podla toho, ci faktura nesie dan.
 CLENENIE_S_DPH = ("UD", "A1")
 CLENENIE_BEZ_DPH = ("UN", "KN")
+# Predkontacia je pre vsetky faktury rovnaka.
+PREDKONTACIA = "602001_Prepr"
 
 MAX_TEXT_POLOZKY = 90  # typ:string90
 
@@ -151,11 +153,15 @@ def do_pohody(faktura: Faktura, cfg: Config) -> Vysledok:
     d_splatnosti = datum(faktura.datum_splatnosti)
     if d_splatnosti:
         inv(h, "dateDue", d_splatnosti)
-    if cfg.nastavenia.predkontacia:
-        _ids(h, "accounting", cfg.nastavenia.predkontacia)
-    # Hlavicka nesie clenenie celej faktury: UD/A1, ked aspon jedna polozka ma DPH.
-    s_dph = any(sadzba > 0 for _, _, sadzba, _ in polozky)
-    clenenie = CLENENIE_S_DPH if s_dph else CLENENIE_BEZ_DPH
+    _ids(h, "accounting", PREDKONTACIA)
+    # Faktura ma vzdy bud vsetky polozky s DPH, alebo vsetky bez nej, preto staci
+    # clenenie v hlavicke. Zmiesane sadzby znamenaju, ze sa nieco precitalo zle.
+    s_dph = [sadzba > 0 for _, _, sadzba, _ in polozky]
+    if any(s_dph) and not all(s_dph):
+        upozornenia.append(
+            "Faktura ma polozky s DPH aj bez DPH. Clenenie UD/A1 plati pre celu fakturu, skontroluj ju."
+        )
+    clenenie = CLENENIE_S_DPH if any(s_dph) else CLENENIE_BEZ_DPH
     _ids(h, "classificationVAT", clenenie[0])
     _ids(h, "classificationKVDPH", clenenie[1])
     if faktura.uvodny_text:
@@ -235,9 +241,6 @@ def do_pohody(faktura: Faktura, cfg: Config) -> Vysledok:
         typ(suma, "priceSum", d2(zaklad + dph))
         if poznamka:
             inv(p, "note", poznamka)
-        clenenie = CLENENIE_S_DPH if sadzba > 0 else CLENENIE_BEZ_DPH
-        _ids(p, "classificationVAT", clenenie[0])
-        _ids(p, "classificationKVDPH", clenenie[1])
         inv(p, "PDP", "false")
 
     # --- suhrn

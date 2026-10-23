@@ -49,8 +49,6 @@ class Nastavenia:
     # Ktore XML vytvarat. Aspon jeden format musi zostat zapnuty.
     vystup_ubl: bool = True
     vystup_pohoda: bool = True
-    # Predkontacia v POHODE, napriklad 602001_Prepr. Prazdna sa do XML nezapise.
-    predkontacia: str = "602001_Prepr"
 
 
 @dataclass(frozen=True)
@@ -156,6 +154,5 @@ def zo_slovnika(udaje: dict) -> Config:
             # Bez formatu by sa nic nevytvorilo, preto vtedy ostava zapnuty UBL.
             vystup_ubl=vystup_ubl or not vystup_pohoda,
             vystup_pohoda=vystup_pohoda,
-            predkontacia=txt("predkontacia", "602001_Prepr"),
         ),
     )
