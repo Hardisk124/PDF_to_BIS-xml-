@@ -84,6 +84,7 @@ class Firma:
     krajina: str = "SK"
     email: str = ""
     telefon: str = ""
+    kontakt: str = ""
     endpoint_id: str = ""
 
 
@@ -267,6 +268,7 @@ def firma_zo_strany(strana: Strana, inak_krajina: str = "SK") -> Firma:
         krajina=krajina,
         email=(strana.email or "").strip(),
         telefon=(strana.telefon or "").strip(),
+        kontakt=(strana.kontakt or "").strip(),
     )
 
 
@@ -307,8 +309,10 @@ def _zapis_stranu(rodic, firma: Firma, endpoint_scheme: str) -> None:
     if firma.ico:
         cbc(pravna, "CompanyID", firma.ico)
 
-    if firma.email or firma.telefon:
+    if firma.kontakt or firma.email or firma.telefon:
         kontakt = cac(party, "Contact")
+        if firma.kontakt:
+            cbc(kontakt, "Name", firma.kontakt)
         if firma.telefon:
             cbc(kontakt, "Telephone", firma.telefon)
         if firma.email:

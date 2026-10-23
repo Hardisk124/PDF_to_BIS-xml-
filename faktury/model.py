@@ -42,6 +42,7 @@ class Strana(BaseModel):
     email: Optional[str] = Field(description="Kontaktny e-mail.")
     telefon: Optional[str] = Field(description="Kontaktny telefon.")
     web: Optional[str] = Field(description="Webova stranka.")
+    kontakt: Optional[str] = Field(description="Kontaktna osoba, pri dodavatelovi ten, kto fakturu vystavil.")
 
 
 class Riadok(BaseModel):

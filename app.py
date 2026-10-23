@@ -138,7 +138,7 @@ def samotest(cesta_protokolu: Path) -> int:
         from faktury.validate import XSD_POHODA, skontroluj, skontroluj_pohodu, skontroluj_xsd
 
         prazdna = dict(nazov=None, ico=None, dic=None, ic_dph=None, ulica=None,
-                       mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None)
+                       mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None, kontakt=None)
         skuska = Faktura(
             cislo_faktury="TEST-1", datum_vystavenia="2026-01-15", datum_splatnosti="2026-01-29",
             datum_dodania=None, typ_dokladu="380", mena="EUR",

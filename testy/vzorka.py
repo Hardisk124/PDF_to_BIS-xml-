@@ -5,7 +5,7 @@ from faktury.model import Faktura, RekapitulaciaDPH, Riadok, Strana
 
 def strana(**kw) -> Strana:
     zaklad = dict(nazov=None, ico=None, dic=None, ic_dph=None, ulica=None,
-                  mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None)
+                  mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None, kontakt=None)
     return Strana(**{**zaklad, **kw})
 
 

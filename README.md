@@ -68,10 +68,12 @@ Aspoň jeden musí zostať zapnutý. EAS kódy potrebuje len Peppol.
 **POHODA XML** sa importuje cez *Súbor → Dátová komunikácia → XML import/export*. Pravidlá:
 
 - Členenie DPH a KV DPH je v hlavičke dokladu: faktúra s DPH nad 0 % dostane `UD` a `A1`,
-  faktúra s 0 % dostane `UN` a `KN`. Na jednej faktúre sú sadzby vždy jednotné. Keby neboli,
+  faktúra s 0 % dostane `UDzahrSl` a `KN`. Na jednej faktúre sú sadzby vždy jednotné. Keby neboli,
   faktúra dostane upozornenie, lebo to znamená, že sa niečo prečítalo zle.
 - Variabilný symbol sú číslice z čísla faktúry (`V26/0687` → `260687`).
 - DPH sa počíta po položkách ako v POHODE, môže sa preto od PDF líšiť o zaokrúhlenie v centoch.
+- Kontakt dodávateľa (vystavila Ľudmila Foltánová, telefón, e-mail, web) sa z PDF nečíta,
+  je natvrdo v `KONTAKT_DODAVATELA` vo `faktury/sablona.py`.
 - Predkontácia je pre všetky faktúry `602001_Prepr` (konštanta `PREDKONTACIA` vo `faktury/pohoda.py`).
 - Text položky má v POHODE najviac 90 znakov, zvyšok popisu ide do poznámky položky.
 

@@ -78,10 +78,16 @@ def rozdel_text(text: str) -> tuple[str, str | None]:
     return text[:rez].rstrip(), text[rez:].strip()[:MAX_TEXT_POLOZKY] or None
 
 
-def _adresa(rodic, strana: Strana, s_cislom: bool) -> None:
+def _adresa(rodic, strana: Strana, s_cislom: bool, osoba: str | None = None) -> None:
     """Spolocne polia partnera aj vlastnej firmy, poradie podla type.xsd."""
     if strana.nazov:
         typ(rodic, "company", strana.nazov)
+    if osoba:
+        # Kontaktna osoba "Ľudmila Foltánová" -> surname Foltánová, name Ľudmila.
+        meno, _, priezvisko = osoba.strip().rpartition(" ")
+        typ(rodic, "surname", priezvisko[:32])
+        if meno:
+            typ(rodic, "name", meno[:32])
     if strana.mesto:
         typ(rodic, "city", strana.mesto)
     ulica, cislo_domu = ulica_a_cislo(strana.ulica) if s_cislom else (strana.ulica, None)
@@ -178,7 +184,7 @@ def do_pohody(faktura: Faktura, cfg: Config) -> Vysledok:
 
     ja = typ(inv(h, "myIdentity"), "address")
     dodavatel = faktura.dodavatel
-    _adresa(ja, dodavatel, s_cislom=True)
+    _adresa(ja, dodavatel, s_cislom=True, osoba=dodavatel.kontakt)
     if dodavatel.ic_dph:
         typ(ja, "icDph", dodavatel.ic_dph)
     if dodavatel.telefon:

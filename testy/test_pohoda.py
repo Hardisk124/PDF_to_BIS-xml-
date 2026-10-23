@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lxml import etree
 
 from faktury.config import Config
-from faktury.pohoda import NS_INV, NS_TYP, do_pohody, rozdel_text, ulica_a_cislo
+from faktury.pohoda import CLENENIE_BEZ_DPH, NS_INV, NS_TYP, do_pohody, rozdel_text, ulica_a_cislo
 from faktury.sablona import precitaj
 from faktury.validate import skontroluj_pohodu
 from testy.vzorka import faktura, riadok
@@ -30,6 +30,7 @@ IGNOROVANE = {
     "invoiceHeader/liquidation/amountHome", "invoiceHeader/lock2", "invoiceHeader/markRecord",
     "invoiceHeader/symConst", "invoiceHeader/myIdentity/address/phone",
     "invoiceHeader/myIdentity/address/email", "invoiceHeader/partnerIdentity/address/company",
+    "invoiceHeader/myIdentity/address/surname", "invoiceHeader/myIdentity/address/name",
     "invoiceDetail/invoiceItem/text",
 }
 
@@ -65,7 +66,7 @@ def clenenie(xml: bytes) -> tuple[str, str]:
 def main() -> int:
     chyby: list[str] = []
 
-    # Clenenie: faktura s DPH UD/A1, bez DPH UN/KN. Zmiesane sadzby sa nemaju stat, preto upozornenie.
+    # Clenenie: faktura s DPH UD/A1, bez DPH podla CLENENIE_BEZ_DPH. Zmiesane sadzby sa nemaju stat, preto upozornenie.
     zmiesana = faktura(
         riadky=[riadok(poradie=1, nazov="Preprava SK", mnozstvo="1", jednotkova_cena="100.00",
                        suma_bez_dph="100.00", sadzba_dph="23"),
@@ -86,7 +87,7 @@ def main() -> int:
         suma_bez_dph="50.00", suma_dph="0.00", suma_s_dph="50.00", na_uhradu="50.00",
     )
     xml = do_pohody(bez_dph, Config()).xml
-    if clenenie(xml) != ("UN", "KN"):
+    if clenenie(xml) != CLENENIE_BEZ_DPH:
         chyby.append(f"faktura bez DPH: clenenie {clenenie(xml)}")
 
     for vstup, ocakavane in [("Obuvnícka 3", ("Obuvnícka", "3")), ("Jasná 724/16", ("Jasná", "724/16")),
@@ -97,6 +98,13 @@ def main() -> int:
     text, poznamka = rozdel_text(dlhy)
     if len(text) > 90 or f"{text} {poznamka}" != dlhy:
         chyby.append(f"rozdel_text: {text!r} / {poznamka!r}")
+
+    # Kontakt dodavatela je natvrdo, nie z faktury.
+    if VSTUP.joinpath("new.pdf").exists():
+        ja = etree.fromstring(do_pohody(precitaj(VSTUP / "new.pdf"), Config()).xml).find(".//inv:myIdentity/typ:address", NS)
+        kontakt = [ja.findtext(f"typ:{p}", namespaces=NS) for p in ("surname", "name", "phone", "email", "www")]
+        if kontakt != ["Foltánová", "Ľudmila", "+421918067976", "info@grimmel.sk", "www.grimmel.sk"]:
+            chyby.append(f"kontakt dodavatela: {kontakt}")
 
     # Skutocne PDF musia prejst XSD POHODY.
     for pdf in sorted(VSTUP.glob("*.pdf")):

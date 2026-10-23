@@ -53,6 +53,14 @@ RIADKOV_DODAVATELA = 8
 # Identifikatory odberatela zacinaju vlavo od jeho adresneho bloku.
 X_ODBERATEL_ID_OD = X_ODBERATEL_OD - 100.0
 
+# Kontakt dodavatela sa z faktury necita, je vzdy rovnaky.
+KONTAKT_DODAVATELA = {
+    "kontakt": "Ľudmila Foltánová",
+    "telefon": "+421918067976",
+    "email": "info@grimmel.sk",
+    "web": "www.grimmel.sk",
+}
+
 TOLERANCIA_RIADKU = 4.0   # o kolko bodov sa smu lisit slova v tom istom riadku
 MAX_STRAN = 30            # poistka proti PDF s tisickami stran
 
@@ -237,7 +245,7 @@ def _dodavatel(riadky: list[RiadokStrany]) -> Strana:
     return Strana(
         nazov=nazov, ico=ico, dic=dic, ic_dph=ic_dph,
         ulica=ulica, mesto=mesto, psc=psc, krajina=krajina,
-        email=None, telefon=None, web=None,
+        email=None, telefon=None, web=None, kontakt=None,
     )
 
 
@@ -280,7 +288,7 @@ def _odberatel(riadky: list[RiadokStrany]) -> Strana:
     return Strana(
         nazov=nazov, ico=ico, dic=dic, ic_dph=ic_dph,
         ulica=ulica, mesto=mesto, psc=psc, krajina=krajina,
-        email=None, telefon=None, web=None,
+        email=None, telefon=None, web=None, kontakt=None,
     )
 
 
@@ -470,11 +478,7 @@ def precitaj(cesta: Path) -> Faktura:
         datum_dodania=_za(hlavicka, "Deň dodania služby:"),
         typ_dokladu="380",
         mena=mena or "EUR",
-        dodavatel=_dodavatel(hlavicka).model_copy(update={
-            "email": _za(posledna, "E-mail:", 300.0),
-            "telefon": _za(posledna, "Telefón:", 300.0),
-            "web": _za(posledna, "Web:", 300.0),
-        }),
+        dodavatel=_dodavatel(hlavicka).model_copy(update=KONTAKT_DODAVATELA),
         odberatel=_odberatel(hlavicka),
         variabilny_symbol=None,
         konstantny_symbol=_za(hlavicka, "Konšt. symbol:"),
