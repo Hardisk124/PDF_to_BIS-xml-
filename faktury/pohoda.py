@@ -26,7 +26,7 @@ SUHRN = {"low": "priceLow", "high": "priceHigh", "third": "price3"}
 
 # Clenenie DPH a clenenie KV DPH podla toho, ci faktura nesie dan.
 CLENENIE_S_DPH = ("UD", "A1")
-CLENENIE_BEZ_DPH = ("UN", "KN")
+CLENENIE_BEZ_DPH = ("UDzahrSl", "KN")
 # Predkontacia je pre vsetky faktury rovnaka.
 PREDKONTACIA = "602001_Prepr"
 
