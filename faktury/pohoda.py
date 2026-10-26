@@ -78,16 +78,10 @@ def rozdel_text(text: str) -> tuple[str, str | None]:
     return text[:rez].rstrip(), text[rez:].strip()[:MAX_TEXT_POLOZKY] or None
 
 
-def _adresa(rodic, strana: Strana, s_cislom: bool, osoba: str | None = None) -> None:
+def _adresa(rodic, strana: Strana, s_cislom: bool) -> None:
     """Spolocne polia partnera aj vlastnej firmy, poradie podla type.xsd."""
     if strana.nazov:
         typ(rodic, "company", strana.nazov)
-    if osoba:
-        # Kontaktna osoba "Ľudmila Foltánová" -> surname Foltánová, name Ľudmila.
-        meno, _, priezvisko = osoba.strip().rpartition(" ")
-        typ(rodic, "surname", priezvisko[:32])
-        if meno:
-            typ(rodic, "name", meno[:32])
     if strana.mesto:
         typ(rodic, "city", strana.mesto)
     ulica, cislo_domu = ulica_a_cislo(strana.ulica) if s_cislom else (strana.ulica, None)
@@ -184,7 +178,7 @@ def do_pohody(faktura: Faktura, cfg: Config) -> Vysledok:
 
     ja = typ(inv(h, "myIdentity"), "address")
     dodavatel = faktura.dodavatel
-    _adresa(ja, dodavatel, s_cislom=True, osoba=dodavatel.kontakt)
+    _adresa(ja, dodavatel, s_cislom=True)
     if dodavatel.ic_dph:
         typ(ja, "icDph", dodavatel.ic_dph)
     if dodavatel.telefon:
@@ -233,7 +227,8 @@ def do_pohody(faktura: Faktura, cfg: Config) -> Vysledok:
         inv(p, "quantity", d4(mnozstvo if mnozstvo is not None else Decimal(1)))
         if riadok.jednotka:
             inv(p, "unit", riadok.jednotka[:10])
-        inv(p, "coefficient", "1.0")
+        # Koeficient sa nezapisuje. Plati len pre skladove polozky a pri textovych
+        # by POHODA pri importe hlasila upozornenie 602.
         inv(p, "payVAT", "false")
         inv(p, "rateVAT", SADZBY[sadzba])
         inv(p, "discountPercentage", "0.0")

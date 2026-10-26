@@ -28,6 +28,8 @@ def priprav_docasne(priecinok: Path) -> None:
     cesty.data = lambda: priecinok
     cesty.config = lambda: priecinok / "config.toml"
     cesty.vystup = lambda: priecinok / "vystup"
+    # Export ide inak natvrdo na D:\\exp_xml, test tam nesmie zapisovat.
+    cesty.KOREN_EXPORTU = priecinok / "exp_xml"
 
 
 def main() -> int:
@@ -98,6 +100,8 @@ def main() -> int:
 
         relacia = data["relacia"]
         over("UBL aj POHODA pre kazdu", all(len(v["vystup"]) == 2 for v in data["vysledky"]), True)
+        over("UBL v exp_xml/bis", len(list((docasny / "exp_xml" / "bis").glob("*.xml"))), len(FAKTURY))
+        over("POHODA v exp_xml/pohoda", len(list((docasny / "exp_xml" / "pohoda").glob("*_pohoda.xml"))), len(FAKTURY))
         prve = data["vysledky"][0]["vystup"][0]
         stiahnute = klient.get(f"/subor/{relacia}/{prve}")
         over("stiahnutie XML", stiahnute.status_code, 200)

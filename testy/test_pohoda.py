@@ -25,12 +25,13 @@ NS = {"inv": NS_INV, "typ": NS_TYP}
 
 # Rozdiely voci vzoru, ktore su zamerne:
 #   - liquidation, lock2, markRecord su stav zaznamu v POHODE, import ich nepotrebuje,
-#   - kontakt, symbol a nazvy su tak, ako su na PDF (vzor ich ma z adresara POHODY).
+#   - coefficient sa pri textovych polozkach nepouziva (POHODA hlasi upozornenie 602),
+#   - kontakt dodavatela je natvrdo, symbol a nazov odberatela su z PDF (vzor ich ma z adresara POHODY).
 IGNOROVANE = {
     "invoiceHeader/liquidation/amountHome", "invoiceHeader/lock2", "invoiceHeader/markRecord",
     "invoiceHeader/symConst", "invoiceHeader/myIdentity/address/phone",
     "invoiceHeader/myIdentity/address/email", "invoiceHeader/partnerIdentity/address/company",
-    "invoiceHeader/myIdentity/address/surname", "invoiceHeader/myIdentity/address/name",
+    "invoiceDetail/invoiceItem/coefficient",
     "invoiceDetail/invoiceItem/text",
 }
 
@@ -103,7 +104,7 @@ def main() -> int:
     if VSTUP.joinpath("new.pdf").exists():
         ja = etree.fromstring(do_pohody(precitaj(VSTUP / "new.pdf"), Config()).xml).find(".//inv:myIdentity/typ:address", NS)
         kontakt = [ja.findtext(f"typ:{p}", namespaces=NS) for p in ("surname", "name", "phone", "email", "www")]
-        if kontakt != ["Foltánová", "Ľudmila", "+421918067976", "info@grimmel.sk", "www.grimmel.sk"]:
+        if kontakt != [None, None, "+421918067976", "info@grimmel.sk", "www.grimmel.sk"]:
             chyby.append(f"kontakt dodavatela: {kontakt}")
 
     # Skutocne PDF musia prejst XSD POHODY.

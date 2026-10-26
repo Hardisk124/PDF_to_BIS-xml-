@@ -13,6 +13,11 @@ from pathlib import Path
 
 NAZOV_APLIKACIE = "FakturyBIS3"
 
+# Exporty XML idu natvrdo na disk D. Aplikacia bezi len na pocitacoch, ktore ho maju.
+# Pod WSL (vyvoj) je ten isty disk pripojeny ako /mnt/d.
+KOREN_EXPORTU = Path("D:/exp_xml") if os.name == "nt" else Path("/mnt/d/exp_xml")
+PRIECINKY_EXPORTU = {"UBL": "bis", "POHODA": "pohoda"}
+
 
 def zabalene() -> bool:
     """True, ked aplikacia bezi ako exe zostavene PyInstallerom."""
@@ -50,6 +55,13 @@ def data() -> Path:
 
 def config() -> Path:
     return data() / "config.toml"
+
+
+def export(format_: str) -> Path:
+    """Priecinok pre XML daneho formatu: D:\\exp_xml\\bis alebo D:\\exp_xml\\pohoda."""
+    priecinok = KOREN_EXPORTU / PRIECINKY_EXPORTU[format_]
+    priecinok.mkdir(parents=True, exist_ok=True)
+    return priecinok
 
 
 def vystup() -> Path:

@@ -55,7 +55,6 @@ X_ODBERATEL_ID_OD = X_ODBERATEL_OD - 100.0
 
 # Kontakt dodavatela sa z faktury necita, je vzdy rovnaky.
 KONTAKT_DODAVATELA = {
-    "kontakt": "Ľudmila Foltánová",
     "telefon": "+421918067976",
     "email": "info@grimmel.sk",
     "web": "www.grimmel.sk",
@@ -185,8 +184,13 @@ def _overene(hodnota: str | None, nazov: str, poradie: int) -> str:
     return hodnota
 
 
+# PSC a mesto v beznych tvaroch: "971 01 Prievidza" (SK, CZ), "5900 OROSHÁZA" (HU, AT),
+# "12345 Berlin" (DE), "00-950 Warszawa" (PL), aj s predponou krajiny "SK - 971 01 Prievidza".
+VZOR_PSC_MESTO = re.compile(r"^\s*(?:[A-Z]{1,2}\s*-\s*)?(\d[\d -]{2,8}\d)\s+(\D.*?)\s*$")
+
+
 def _psc_a_mesto(text: str) -> tuple[str | None, str | None]:
-    m = re.match(r"^\s*(\d{3}\s?\d{2})\s+(.+?)\s*$", text)
+    m = VZOR_PSC_MESTO.match(text)
     if m:
         return m.group(1).replace(" ", ""), m.group(2)
     return None, (text.strip() or None)
@@ -245,7 +249,7 @@ def _dodavatel(riadky: list[RiadokStrany]) -> Strana:
     return Strana(
         nazov=nazov, ico=ico, dic=dic, ic_dph=ic_dph,
         ulica=ulica, mesto=mesto, psc=psc, krajina=krajina,
-        email=None, telefon=None, web=None, kontakt=None,
+        email=None, telefon=None, web=None,
     )
 
 
@@ -266,19 +270,30 @@ def _odberatel(riadky: list[RiadokStrany]) -> Strana:
     ]
     ico, dic, ic_dph = _identifikatory(riadky[koniec].text(X_ODBERATEL_ID_OD))
 
-    if len(adresa) < 3:
+    # Adresa sa cita zdola, od pevnych bodov. Nazov firmy moze mat viac riadkov,
+    # preto sa neda spoliehat na to, ze ulica je vzdy druhy riadok.
+    #   posledny riadok bez cislic  -> krajina (nemusi byt)
+    #   posledny riadok s PSC       -> PSC a mesto
+    #   riadok nad nim              -> ulica
+    #   vsetko nad ulicou           -> nazov firmy
+    riadok_krajiny = ""
+    if adresa and not re.search(r"\d", adresa[-1]):
+        riadok_krajiny = adresa.pop()
+
+    s_psc = [i for i, text in enumerate(adresa) if VZOR_PSC_MESTO.match(text)]
+    if not s_psc:
         raise ChybaSablony(
-            f"Adresa odberatela ma {len(adresa)} riadkov, ocakavaju sa aspon tri "
-            "(nazov, ulica, PSC a mesto)."
+            f"V adrese odberatela {adresa} sa nenasiel riadok s PSC a mestom."
+        )
+    index_psc = s_psc[-1]
+    if index_psc < 2:
+        raise ChybaSablony(
+            f"Nad riadkom '{adresa[index_psc]}' v adrese odberatela chyba nazov firmy alebo ulica."
         )
 
-    nazov, ulica = adresa[0], adresa[1]
-    psc, mesto = _psc_a_mesto(adresa[2])
-    if not psc or not mesto:
-        raise ChybaSablony(
-            f"Riadok '{adresa[2]}' v adrese odberatela nema ocakavany tvar 'PSC mesto'."
-        )
-    riadok_krajiny = adresa[3] if len(adresa) > 3 else ""
+    nazov = " ".join(adresa[:index_psc - 1])
+    ulica = adresa[index_psc - 1]
+    psc, mesto = _psc_a_mesto(adresa[index_psc])
     krajina = _krajina(riadok_krajiny, ic_dph)
     if not krajina:
         raise ChybaSablony(
@@ -288,7 +303,7 @@ def _odberatel(riadky: list[RiadokStrany]) -> Strana:
     return Strana(
         nazov=nazov, ico=ico, dic=dic, ic_dph=ic_dph,
         ulica=ulica, mesto=mesto, psc=psc, krajina=krajina,
-        email=None, telefon=None, web=None, kontakt=None,
+        email=None, telefon=None, web=None,
     )
 
 

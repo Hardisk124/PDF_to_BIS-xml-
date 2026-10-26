@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from . import cesty
 from .config import Config
 from .pohoda import do_pohody
 from .sablona import ChybaSablony, precitaj
@@ -24,6 +25,7 @@ FORMATY = {
 
 @dataclass
 class Vystup:
+    format: str
     nazov: str
     xml: bytes
     platne: bool
@@ -102,7 +104,7 @@ def spracuj_subor(cesta: Path, cfg: Config) -> Vysledok:
                     f"{nazov}: XSD schemy nie su stiahnute, struktura XML sa neoverila. "
                     "Spusti stiahni_schemy.py."
                 )
-            vysledok.vystupy.append(Vystup(zaklad_nazvu + pripona, prevedene.xml, platne=not chyby))
+            vysledok.vystupy.append(Vystup(nazov, zaklad_nazvu + pripona, prevedene.xml, platne=not chyby))
         vysledok.ok = bool(vysledok.vystupy)
 
     except ChybaSablony as chyba:
@@ -121,21 +123,31 @@ def spracuj_vsetky(subory: list[Path], cfg: Config, vlakna: int = 4) -> list[Vys
         return list(bazen.map(lambda s: spracuj_subor(s, cfg), subory))
 
 
-def zapis(vysledok: Vysledok, priecinok_vystup: Path, priecinok_chyby: Path, striktne: bool) -> Vysledok:
-    """Zapise XML do vystupu, alebo protokol o chybe do priecinka chyb."""
-    priecinok_vystup.mkdir(parents=True, exist_ok=True)
+def zapis(
+    vysledok: Vysledok, priecinok_chyby: Path, striktne: bool, kopia_do: Path | None = None
+) -> Vysledok:
+    """Zapise XML do exportu podla formatu (cesty.export), alebo protokol o chybe do priecinka chyb.
+
+    kopia_do: priecinok, kam sa XML ulozi este raz pod tym istym menom. Aplikacia
+    odtial ponuka subory na stiahnutie a ZIP.
+    """
     priecinok_chyby.mkdir(parents=True, exist_ok=True)
 
     for vystup in vysledok.vystupy:
         if striktne and not vystup.platne:
             continue
-        cielovy = priecinok_vystup / vystup.nazov
+        priecinok = cesty.export(vystup.format)
+        cielovy = priecinok / vystup.nazov
         poradie = 2
+        # Existujuci subor sa neprepise, novy dostane _2, _3 a tak dalej.
         while cielovy.exists():
-            cielovy = priecinok_vystup / f"{Path(vystup.nazov).stem}_{poradie}.xml"
+            cielovy = priecinok / f"{Path(vystup.nazov).stem}_{poradie}.xml"
             poradie += 1
         cielovy.write_bytes(vystup.xml)
         vystup.cesta = cielovy
+        if kopia_do is not None:
+            kopia_do.mkdir(parents=True, exist_ok=True)
+            (kopia_do / cielovy.name).write_bytes(vystup.xml)
 
     if vysledok.chyby or not vysledok.ok:
         protokol = priecinok_chyby / f"{vysledok.subor.stem}.txt"

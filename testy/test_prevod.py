@@ -50,7 +50,7 @@ def test_normalizacia() -> list[str]:
             chyby.append(f"kod_uhrady({vstup!r}) = {kod_uhrady(vstup, False)}, ocakavane {ocakavane}")
 
     for vstup, ocakavane in [("SK", "SK"), ("Česká republika", "CZ"), ("Österreich", "AT"),
-                             ("SVK", "SK"), ("Narnia", None), (None, None)]:
+                             ("SVK", "SK"), ("Maďarská republika", "HU"), ("Narnia", None), (None, None)]:
         if kod_krajiny(vstup) != ocakavane:
             chyby.append(f"kod_krajiny({vstup!r}) = {kod_krajiny(vstup)}, ocakavane {ocakavane}")
 

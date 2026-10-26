@@ -72,7 +72,7 @@ Aspoň jeden musí zostať zapnutý. EAS kódy potrebuje len Peppol.
   faktúra dostane upozornenie, lebo to znamená, že sa niečo prečítalo zle.
 - Variabilný symbol sú číslice z čísla faktúry (`V26/0687` → `260687`).
 - DPH sa počíta po položkách ako v POHODE, môže sa preto od PDF líšiť o zaokrúhlenie v centoch.
-- Kontakt dodávateľa (vystavila Ľudmila Foltánová, telefón, e-mail, web) sa z PDF nečíta,
+- Kontakt dodávateľa (telefón, e-mail, web) sa z PDF nečíta,
   je natvrdo v `KONTAKT_DODAVATELA` vo `faktury/sablona.py`.
 - Predkontácia je pre všetky faktúry `602001_Prepr` (konštanta `PREDKONTACIA` vo `faktury/pohoda.py`).
 - Text položky má v POHODE najviac 90 znakov, zvyšok popisu ide do poznámky položky.
@@ -93,12 +93,13 @@ v `config.toml`, ale potom si výstup musíš kontrolovať sám.
 
 ```bash
 ./.venv/bin/python app.py                          # aplikácia s vlastným oknom
-./.venv/bin/python cli.py                          # vstup/ -> vystup/
+./.venv/bin/python cli.py                          # vstup/ -> D:\exp_xml
 ./.venv/bin/python cli.py --vstup D:/faktury/2026 --vlakna 8
 ./.venv/bin/python cli.py --striktne               # nezapíše XML, ktoré neprejde validáciou
 ```
 
-XML idú do `vystup/`. Faktúra s chybou alebo upozornením dostane protokol v `chyby/`,
+XML idú natvrdo do `D:\exp_xml\bis` (Peppol BIS) a `D:\exp_xml\pohoda` (POHODA),
+priečinky sa vytvoria samé. Existujúci súbor sa neprepíše, nový dostane `_2`, `_3`. Faktúra s chybou alebo upozornením dostane protokol v `chyby/`,
 plus je tam `suhrn.json` s prehľadom celej dávky.
 
 ## Ako to funguje

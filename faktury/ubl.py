@@ -58,9 +58,9 @@ UHRADA_INAK = "1"  # instrument not defined
 # Kluce su male pismena bez diakritiky a medzier, pozri kod_krajiny().
 KRAJINY = {
     "svk": "SK", "slovensko": "SK", "slovenska": "SK", "slovenskarepublika": "SK",
-    "cze": "CZ", "cesko": "CZ", "ceskarepublika": "CZ",
+    "cze": "CZ", "cesko": "CZ", "ceska": "CZ", "ceskarepublika": "CZ",
     "pol": "PL", "polsko": "PL", "polska": "PL", "poland": "PL",
-    "hun": "HU", "madarsko": "HU",
+    "hun": "HU", "madarsko": "HU", "madarska": "HU",
     "deu": "DE", "nemecko": "DE", "deutschland": "DE",
     "aut": "AT", "rakusko": "AT", "osterreich": "AT",
 }
@@ -84,7 +84,6 @@ class Firma:
     krajina: str = "SK"
     email: str = ""
     telefon: str = ""
-    kontakt: str = ""
     endpoint_id: str = ""
 
 
@@ -228,7 +227,8 @@ def kod_krajiny(hodnota: str | None) -> str | None:
     text = re.sub(r"[^a-z]", "", bez_diakritiky(str(hodnota)).lower())
     if len(text) == 2:
         return text.upper()
-    return KRAJINY.get(text)
+    # "Maďarská republika" -> "madarskarepublika" -> "madarska"
+    return KRAJINY.get(text) or KRAJINY.get(text.removesuffix("republika"))
 
 
 # ---------------------------------------------------------------- pomocne XML
@@ -268,7 +268,6 @@ def firma_zo_strany(strana: Strana, inak_krajina: str = "SK") -> Firma:
         krajina=krajina,
         email=(strana.email or "").strip(),
         telefon=(strana.telefon or "").strip(),
-        kontakt=(strana.kontakt or "").strip(),
     )
 
 
@@ -309,10 +308,8 @@ def _zapis_stranu(rodic, firma: Firma, endpoint_scheme: str) -> None:
     if firma.ico:
         cbc(pravna, "CompanyID", firma.ico)
 
-    if firma.kontakt or firma.email or firma.telefon:
+    if firma.email or firma.telefon:
         kontakt = cac(party, "Contact")
-        if firma.kontakt:
-            cbc(kontakt, "Name", firma.kontakt)
         if firma.telefon:
             cbc(kontakt, "Telephone", firma.telefon)
         if firma.email:

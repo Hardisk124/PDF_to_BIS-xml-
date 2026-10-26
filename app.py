@@ -82,6 +82,9 @@ def otvor_okno(url: str) -> bool:
     except ImportError:
         return False
     try:
+        # Bez tohto okno kazde stiahnutie XML alebo ZIP potichu zrusi.
+        # Povolene stiahnutie otvori okno "Ulozit ako" v priecinku Stiahnute.
+        webview.settings["ALLOW_DOWNLOADS"] = True
         webview.create_window(NAZOV_OKNA, url, width=1100, height=820, min_size=(720, 560))
         webview.start()
         return True
@@ -114,6 +117,7 @@ def samotest(cesta_protokolu: Path) -> int:
     skus("priecinok dat", lambda: cesty.data())
     skus("cesta ku konfiguracii", lambda: cesty.config())
     skus("priecinok vystupov", lambda: cesty.vystup())
+    skus("priecinky exportu", lambda: f"{cesty.export('UBL')}, {cesty.export('POHODA')}")
 
     def schemy():
         from faktury.validate import XSD_INVOICE, xsd_dostupne
@@ -138,7 +142,7 @@ def samotest(cesta_protokolu: Path) -> int:
         from faktury.validate import XSD_POHODA, skontroluj, skontroluj_pohodu, skontroluj_xsd
 
         prazdna = dict(nazov=None, ico=None, dic=None, ic_dph=None, ulica=None,
-                       mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None, kontakt=None)
+                       mesto=None, psc=None, krajina=None, email=None, telefon=None, web=None)
         skuska = Faktura(
             cislo_faktury="TEST-1", datum_vystavenia="2026-01-15", datum_splatnosti="2026-01-29",
             datum_dodania=None, typ_dokladu="380", mena="EUR",
@@ -224,7 +228,7 @@ def main() -> int:
 
     print(f"{NAZOV_OKNA}")
     print(f"Nastavenia: {cesty.config()}")
-    print(f"Vystupy:    {cesty.vystup()}")
+    print(f"Exporty:    {cesty.export('UBL')}, {cesty.export('POHODA')}")
     print(f"Adresa:     {url}")
 
     if otvor_okno(url):

@@ -89,7 +89,7 @@ def vytvor_aplikaciu() -> FastAPI:
                 "nastavenia": ploche(cfg),
                 "chybajuce": cfg.chybajuce(),
                 "cesta_config": str(cesty.config()),
-                "cesta_vystup": str(cesty.vystup()),
+                "cesta_vystup": f"{cesty.export('UBL')}, {cesty.export('POHODA')}",
             }
         )
 
@@ -146,7 +146,7 @@ def vytvor_aplikaciu() -> FastAPI:
 
             odpoved = []
             for vysledok in spracuj_vsetky(cesty_pdf, cfg):
-                zapis(vysledok, priecinok, priecinok / "chyby", cfg.nastavenia.striktna_validacia)
+                zapis(vysledok, priecinok / "chyby", cfg.nastavenia.striktna_validacia, kopia_do=priecinok)
                 odpoved.append(
                     {
                         **vysledok.slovnik(),
@@ -203,7 +203,8 @@ STRANKA = r"""<!doctype html>
 <style>
 :root{--ram:#dcdcd6;--tlm:#6b6b66;--pod:#faf9f6;--karta:#fff;--text:#1a1a18;
       --ok:#1f7a4d;--upoz:#9a6a00;--chyba:#b02a24;--zvyr:#2b5fd9;}
-@media (prefers-color-scheme:dark){:root{--ram:#3a3a36;--tlm:#9b9b94;--pod:#15151a;--karta:#1e1e24;--text:#eceae4;--zvyr:#7aa2ff;}}
+@media (prefers-color-scheme:dark){:root{--ram:#3a3a36;--tlm:#9b9b94;--pod:#15151a;--karta:#1e1e24;--text:#eceae4;--zvyr:#7aa2ff;
+  --ok:#4cc38a;--upoz:#e0a53a;--chyba:#f0716a;}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--pod);color:var(--text);
      font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -226,6 +227,13 @@ label.volba{display:flex;gap:8px;align-items:center;color:var(--text);font-size:
 button.tl{font:inherit;padding:9px 18px;border-radius:8px;border:1px solid var(--ram);background:var(--karta);color:var(--text);cursor:pointer}
 button.tl.hlavne{background:var(--text);color:var(--pod);border-color:var(--text)}
 button.tl:disabled{opacity:.45;cursor:default}
+button.tl,a.stiahni{display:inline-flex;align-items:center;gap:7px}
+.ikona{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.subory{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+a.stiahni{padding:5px 10px;border:1px solid var(--ram);border-radius:7px;background:var(--pod);
+  color:var(--text);text-decoration:none;font-size:13px;white-space:nowrap;transition:.15s}
+a.stiahni:hover,a.stiahni:focus-visible{border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,var(--karta))}
+a.stiahni .format{font-weight:600;font-size:11px;letter-spacing:.04em;color:var(--ok)}
 #stav{color:var(--tlm);font-size:14px}
 table{width:100%;border-collapse:collapse;margin-top:6px;font-size:14px}
 th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--ram);vertical-align:top}
@@ -268,7 +276,7 @@ input[type=text],input[type=password],select{width:100%;font:inherit;padding:8px
   </div>
   <div class="akcie">
     <button class="tl hlavne" id="spusti" disabled>Previest</button>
-    <button class="tl" id="zip" disabled>Stiahnut vsetko ako ZIP</button>
+    <button class="tl" id="zip" disabled><svg class="ikona" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>Stiahnut vsetko ako ZIP</button>
     <span id="stav"></span>
   </div>
   <div class="tabulka-obal"><table id="tabulka" hidden>
@@ -431,8 +439,9 @@ function vykresli(vysledky){
     r.insertCell().textContent = v.cislo_faktury || "";
     r.insertCell().textContent = v.dodavatel || "";
     const s = r.insertCell(); s.className = "suma"; s.textContent = v.suma || "";
-    r.insertCell().innerHTML = v.vystup
-      .map(n => `<a href="/subor/${relacia}/${encodeURIComponent(n)}">${esc(n)}</a>`).join("<br>");
+    r.insertCell().innerHTML = `<div class="subory">${v.vystup.map(n =>
+      `<a class="stiahni" download href="/subor/${relacia}/${encodeURIComponent(n)}" title="Stiahnut ${esc(n)}">`
+      + `<svg class="ikona" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg><span class="format">${n.endsWith("_pohoda.xml") ? "POHODA" : "UBL"}</span>${esc(n)}</a>`).join("")}</div>`;
   }
   $("tabulka").hidden = false;
 }

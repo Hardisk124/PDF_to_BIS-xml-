@@ -24,7 +24,6 @@ ZNACKY = {"ok": "OK   ", "s upozornenim": "UPOZ ", "neplatne": "NEPL ", "chyba":
 def argumenty() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Prevod PDF faktur do Peppol BIS Billing 3.0 (UBL XML).")
     p.add_argument("--vstup", type=Path, default=KOREN / "vstup", help="Priecinok s PDF faktumi.")
-    p.add_argument("--vystup", type=Path, default=KOREN / "vystup", help="Priecinok pre XML.")
     p.add_argument("--chyby", type=Path, default=KOREN / "chyby", help="Priecinok pre protokoly o chybach.")
     p.add_argument("--config", type=Path, default=KOREN / "config.toml", help="Konfiguracny subor.")
     p.add_argument("--vlakna", type=int, default=4, help="Kolko faktur spracovat naraz.")
@@ -57,7 +56,7 @@ def main() -> int:
     vysledky = spracuj_vsetky(subory, cfg, args.vlakna)
 
     for vysledok in vysledky:
-        zapis(vysledok, args.vystup, args.chyby, striktne)
+        zapis(vysledok, args.chyby, striktne)
         znacka = ZNACKY.get(vysledok.stav, "?????")
         popis = vysledok.cislo_faktury or "bez cisla"
         print(f"{znacka} {vysledok.subor.name}  ->  {popis}")
@@ -74,7 +73,7 @@ def main() -> int:
         f"\nHotovo. OK {pocty['ok']}, s upozornenim {pocty['s upozornenim']}, "
         f"neplatnych {pocty['neplatne']}, chybnych {pocty['chyba']}."
     )
-    print(f"XML v {args.vystup}, protokoly v {args.chyby}, suhrn v {suhrn}.")
+    print(f"XML v {cesty.export('UBL')} a {cesty.export('POHODA')}, protokoly v {args.chyby}, suhrn v {suhrn}.")
 
     return 1 if pocty["chyba"] else 0
 

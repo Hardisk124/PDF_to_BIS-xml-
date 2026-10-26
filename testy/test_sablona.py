@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from faktury.config import Config, Nastavenia, Peppol
 from faktury.pipeline import spracuj_subor
-from faktury.sablona import precitaj
+from faktury.sablona import _psc_a_mesto, precitaj
 from faktury.ubl import cislo
 
 CFG = Config(
@@ -27,7 +27,8 @@ POVINNE_POLIA = [
     "iban", "bic", "sposob_uhrady", "suma_bez_dph", "suma_dph", "suma_s_dph", "na_uhradu",
 ]
 POVINNE_DODAVATEL = ["nazov", "ico", "dic", "ic_dph", "ulica", "mesto", "psc", "krajina"]
-POVINNE_ODBERATEL = ["nazov", "ico", "ic_dph", "ulica", "mesto", "psc", "krajina"]
+# ICO nie je povinne, zahranicny odberatel ho nema (faktura 781). Kde ma byt, overi ho OCAKAVANE.
+POVINNE_ODBERATEL = ["nazov", "ic_dph", "ulica", "mesto", "psc", "krajina"]
 
 # Presne hodnoty odpisane z papierovych faktur. Kontrola vnutornej konzistencie
 # by nezachytila, keby sa napriklad ulica a mesto prehodili, preto su tu aj tieto.
@@ -64,6 +65,24 @@ OCAKAVANE = {
         "odberatel": ("ARIMEX Bratislava spol. s r.o.", "31325076", "SK2020335581",
                       "Vajnorská 100/A", "Bratislava", "83104", "SK"),
         "prvy_riadok": ("25.040", "t", "21.00", "525.84", "23"),
+    },
+    # Zahranicny odberatel: nazov na dvoch riadkoch, stvorciferne madarske PSC, bez ICO.
+    "781.pdf": {
+        "cislo_faktury": "V26/0781",
+        "datum_vystavenia": "21.10.2026",
+        "datum_splatnosti": "05.12.2026",
+        "datum_dodania": "16.10.2026",
+        "iban": "SK0575000000004005114339",
+        "bic": "CEKOSKBX",
+        "sposob_uhrady": "PP",
+        "suma_bez_dph": "2570.92",
+        "suma_dph": "0.00",
+        "na_uhradu": "2570.92",
+        "pocet_riadkov": 3,
+        "dodavatel": ("GRIMMEL, s.r.o.", "36787965", "SK2022389633", "Obuvnícka 3", "Prievidza", "97101", "SK"),
+        "odberatel": ("TECHNO-DRUCK Fuvarozó és Fuvarzervezö Kft.", None, "HU10577965",
+                      "Vásárhelyi út. 74", "OROSHÁZA", "5900", "HU"),
+        "prvy_riadok": ("23.280", "t", "39.50", "919.56", "0"),
     },
 }
 POLIA_STRANY = ("nazov", "ico", "ic_dph", "ulica", "mesto", "psc", "krajina")
@@ -149,13 +168,29 @@ def skontroluj_fakturu(cesta: Path) -> list[str]:
     return chyby
 
 
+def skontroluj_psc() -> list[str]:
+    chyby = []
+    for text, ocakavane in [("971 01 Prievidza", ("97101", "Prievidza")), ("5900 OROSHÁZA", ("5900", "OROSHÁZA")),
+                            ("12345 Berlin", ("12345", "Berlin")), ("00-950 Warszawa", ("00-950", "Warszawa")),
+                            ("SK - 971 01 Prievidza", ("97101", "Prievidza")),
+                            ("Vásárhelyi út. 74", (None, "Vásárhelyi út. 74"))]:
+        if _psc_a_mesto(text) != ocakavane:
+            chyby.append(f"_psc_a_mesto({text!r}) = {_psc_a_mesto(text)}, ocakavane {ocakavane}")
+    return chyby
+
+
 def main() -> int:
+    chyby_psc = skontroluj_psc()
+    print("PSC a mesto:", "OK" if not chyby_psc else "ZLYHALO")
+    for c in chyby_psc:
+        print("    ", c)
+
     subory = sorted(Path(__file__).resolve().parent.parent.joinpath("vstup").glob("*.pdf"))
     if not subory:
         print("V priecinku vstup/ nie su ziadne PDF, test sa preskakuje.")
         return 0
 
-    zlyhalo = 0
+    zlyhalo = len(chyby_psc)
     for cesta in subory:
         chyby = skontroluj_fakturu(cesta)
         print(f"{cesta.name}: {'OK' if not chyby else 'ZLYHALO'}")
