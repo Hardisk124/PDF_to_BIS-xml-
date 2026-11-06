@@ -1,7 +1,8 @@
 # Faktúry → Peppol BIS Billing 3.0 a POHODA
 
-Prevedie vystavené PDF faktúry na UBL 2.1 XML podľa Peppol BIS Billing 3.0, na XML
-importu do účtovného programu POHODA (SK), alebo na oba naraz. Formát sa volí v nastaveniach.
+Prevedie vystavené PDF faktúry na UBL 2.1 XML podľa Peppol BIS Billing 3.0, na hlásenie
+Peppol SK Tax Data Document (TDD) pre Finančnú správu a na XML importu do účtovného programu
+POHODA (SK), v ľubovoľnej kombinácii. Formáty sa volia v nastaveniach.
 Číta jeden pevný vzor faktúry podľa súradníc stĺpcov. Beží celé lokálne,
 nič neodchádza z počítača a prevod nič nestojí.
 
@@ -62,8 +63,24 @@ len veci, ktoré na doklade nie sú.
 [zozname EAS kódov](https://docs.peppol.eu/poacc/billing/3.0/codelist/eas/)
 alebo u svojho Access Pointu. Hodnoty v priloženom `config.toml` sú len zástupné.
 
-**Výstupné formáty.** Peppol UBL ide do `FAKTURA.xml`, POHODA do `FAKTURA_pohoda.xml`.
-Aspoň jeden musí zostať zapnutý. EAS kódy potrebuje len Peppol.
+**Výstupné formáty.** Peppol UBL ide do `FAKTURA.xml`, TDD do `FAKTURA_tdd.xml`, POHODA do
+`FAKTURA_pohoda.xml`. Aspoň jeden musí zostať zapnutý. EAS kódy potrebuje len Peppol (BIS aj TDD).
+
+**EndpointID sa vyberá podľa EAS kódu.** `0245` je DIČ (bez `SK`), `0158` IČO, `9950` IČ DPH.
+Napríklad EAS `0245` dá Peppol ID `0245:2022389633`. Pole *Môj EndpointID* hodnotu z faktúry prepíše.
+
+**Peppol SK TDD** je hlásenie faktúry pre Finančnú správu podľa
+[Slovak Republic Tax Data Document 1.0.0](https://docs.peppol.eu/tdd/sk/tdd-sk/). Nie je to faktúra
+pre zákazníka, tá zostáva v BIS. Koreň je `pxs:TaxData` a faktúra je v ňom okresaná na údaje,
+ktoré pravidlá ibr-tdd povoľujú. V nastaveniach treba vyplniť:
+
+- *SPID príjemcu* (Finančná správa) a *SPID reprezentanta* (tvoj Access Point), oba v schéme `0242`.
+  Dá ti ich Access Point. Kým sú prázdne, TDD neprejde validáciou.
+- *Rola* `C2` (hlási strana dodávateľa) alebo `C3` (strana odberateľa).
+- *ID a názov daňového úradu*, predvolene `SK-TAX` a `Financna sprava SR`.
+
+Hlásiaca strana je tvoj Peppol ID (EAS kód a EndpointID dodávateľa). Rozsah dokladu sa
+určí z krajín: rovnaká krajina je `D`, odberateľ v EÚ `IC`, inak `INTL`.
 
 **POHODA XML** sa importuje cez *Súbor → Dátová komunikácia → XML import/export*. Pravidlá:
 
@@ -98,14 +115,14 @@ v `config.toml`, ale potom si výstup musíš kontrolovať sám.
 ./.venv/bin/python cli.py --striktne               # nezapíše XML, ktoré neprejde validáciou
 ```
 
-XML idú natvrdo do `D:\exp_xml\bis` (Peppol BIS) a `D:\exp_xml\pohoda` (POHODA),
+XML idú natvrdo do `D:\exp_xml\bis` (Peppol BIS), `D:\exp_xml\tdd` (Peppol SK TDD) a `D:\exp_xml\pohoda` (POHODA),
 priečinky sa vytvoria samé. Existujúci súbor sa neprepíše, nový dostane `_2`, `_3`. Faktúra s chybou alebo upozornením dostane protokol v `chyby/`,
 plus je tam `suhrn.json` s prehľadom celej dávky.
 
 ## Ako to funguje
 
 ```
-PDF → slová so súradnicami (pdfplumber) → čítanie podľa stĺpcov → UBL a/alebo POHODA XML → validácia → zápis
+PDF → slová so súradnicami (pdfplumber) → čítanie podľa stĺpcov → UBL / TDD / POHODA XML → validácia → zápis
 ```
 
 Faktúra sa nečíta z plochého textu, ale podľa polohy slov na strane. Ploché čítanie by
@@ -117,6 +134,7 @@ vlastných objednávok vľavo.
 | `faktury/sablona.py` | Čítanie faktúry podľa súradníc. Tu sa upravuje, keď sa zmení vzor |
 | `faktury/model.py` | Štruktúra faktúry |
 | `faktury/ubl.py` | Normalizácia súm a dátumov, stavba Peppol UBL XML |
+| `faktury/tdd.py` | Peppol SK TDD: obal `pxs:TaxData` nad hotovým UBL, whitelist povolených elementov |
 | `faktury/pohoda.py` | Stavba XML importu do POHODY |
 | `faktury/validate.py` | Obchodné pravidlá a XSD |
 | `faktury/pipeline.py` | Spojenie krokov, ošetrenie chýb |
@@ -143,6 +161,9 @@ Dve úrovne. Vstavané obchodné pravidlá EN 16931 a Peppol kontrolujú súčty
 základu dane, rekapituláciu DPH, povinné polia a kategórie DPH. XSD kontrola overí
 štruktúru proti oficiálnej UBL 2.1 schéme, ak sú schémy stiahnuté. POHODA XML sa overuje
 proti XSD schéme faktúry od Stormware (`schemas/pohoda/`, sťahuje ju tiež `stiahni_schemy.py`).
+TDD sa overuje proti oficiálnej OpenPeppol XSD (`schemas/tdd/`, tiež zo `stiahni_schemy.py`)
+a fatálnym pravidlám hlavičky ibr-tdd. Pri overovaní na ecosio vyber pravidlo
+*Peppol SK Tax Data Document 1.0.0* pre `_tdd.xml` a *Peppol BIS Billing 3.0* pre faktúru.
 
 **Toto nenahrádza oficiálny Peppol Schematron.** Ten beží nad XSLT 2.0, čo Python sám
 nevie. Kým budeš XML posielať prvýkrát, prežeň dávku cez
@@ -179,4 +200,5 @@ Aplikácia nemá konzolu, takže si píše dva denníky do `%APPDATA%\FakturyBIS
 ./.venv/bin/python testy/test_sablona.py     # čítanie skutočných PDF vrátane očakávaných hodnôt
 ./.venv/bin/python testy/test_server.py      # server: nahranie, sťahovanie, ZIP, ochrany
 ./.venv/bin/python testy/test_pohoda.py      # POHODA: členenie DPH, XSD, porovnanie so vzorom z POHODY
+./.venv/bin/python testy/test_tdd.py         # Peppol SK TDD: XSD, ibr-tdd, zhoda súm s BIS, faktúra 851
 ```

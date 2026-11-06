@@ -271,6 +271,20 @@ def firma_zo_strany(strana: Strana, inak_krajina: str = "SK") -> Firma:
     )
 
 
+# EAS kod urcuje, ktory identifikator strany patri do EndpointID. Hodnota musi
+# zodpovedat scheme, inak Access Point doruci doklad na neexistujucu adresu.
+ENDPOINT_PODLA_SCHEMY = {"0245": "dic", "0158": "ico", "9950": "ic_dph"}
+
+
+def endpoint_podla_schemy(firma: Firma, schema: str) -> str:
+    """Hodnota EndpointID pre dany EAS kod: 0245 je DIC, 0158 ICO, 9950 IC DPH."""
+    pole = ENDPOINT_PODLA_SCHEMY.get((schema or "").strip())
+    hodnota = getattr(firma, pole) if pole else ""
+    if pole == "dic":
+        hodnota = re.sub(r"\D", "", hodnota)  # DIC je bez predpony krajiny
+    return hodnota or firma.ic_dph or firma.ico
+
+
 def _zapis_stranu(rodic, firma: Firma, endpoint_scheme: str) -> None:
     """Poradie elementov v cac:Party je dane UBL schemou."""
     party = cac(rodic, "Party")
@@ -442,11 +456,23 @@ def do_ubl(faktura: Faktura, cfg: Config) -> Vysledok:
     dodavatel = firma_zo_strany(faktura.dodavatel)
     dodavatel = replace(
         dodavatel,
-        endpoint_id=cfg.peppol.moj_endpoint_id or dodavatel.ic_dph or dodavatel.ico,
+        endpoint_id=cfg.peppol.moj_endpoint_id or endpoint_podla_schemy(dodavatel, cfg.peppol.moj_endpoint_scheme),
     )
 
     odberatel = firma_zo_strany(faktura.odberatel)
-    odberatel = replace(odberatel, endpoint_id=odberatel.ic_dph or odberatel.ico)
+    odberatel = replace(
+        odberatel, endpoint_id=endpoint_podla_schemy(odberatel, cfg.peppol.odberatel_endpoint_scheme)
+    )
+    for oznacenie, firma, schema in (
+        ("dodavatela", dodavatel, "" if cfg.peppol.moj_endpoint_id else cfg.peppol.moj_endpoint_scheme),
+        ("odberatela", odberatel, cfg.peppol.odberatel_endpoint_scheme),
+    ):
+        pole = ENDPOINT_PODLA_SCHEMY.get((schema or "").strip())
+        if pole and not getattr(firma, pole):
+            upozornenia.append(
+                f"Pre EAS {schema} chyba na fakture {pole.upper()} {oznacenie}, EndpointID je "
+                f"nahradny '{firma.endpoint_id}' a nemusi zodpovedat scheme. Over ho u Access Pointu."
+            )
 
     nulova = nast.kategoria_nulovej_dph
     riadky_sumy = priprav_riadky(faktura, upozornenia, nulova)
@@ -585,12 +611,11 @@ def do_ubl(faktura: Faktura, cfg: Config) -> Vysledok:
         prvok = cac(root, nazov_riadku)
         cbc(prvok, "ID", str(riadok.poradie or index))
         mnozstvo = cislo(riadok.mnozstvo)
-        cbc(
-            prvok,
-            nazov_mnozstva,
-            d4(mnozstvo if mnozstvo is not None else Decimal(1)),
-            unitCode=kod_jednotky(riadok.jednotka),
-        )
+        mnozstvo_xml = mnozstvo if mnozstvo is not None else Decimal(1)
+        # PEPPOL-R120 a BR-27: cena je vzdy kladna, znamienko zapornej sumy preto nesie mnozstvo.
+        if suma < 0 < mnozstvo_xml:
+            mnozstvo_xml = -mnozstvo_xml
+        cbc(prvok, nazov_mnozstva, d4(mnozstvo_xml), unitCode=kod_jednotky(riadok.jednotka))
         cbc(prvok, "LineExtensionAmount", d2(suma), currencyID=mena)
 
         polozka = cac(prvok, "Item")

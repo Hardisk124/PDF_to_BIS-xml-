@@ -10,6 +10,7 @@ nepouzitelne XML nedostalo do vystupu.
 
 from __future__ import annotations
 
+import re
 import threading
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
@@ -26,6 +27,8 @@ NS = {"cac": NS_CAC, "cbc": NS_CBC}
 XSD_INVOICE = cesty.zdroj("schemas", "maindoc", "UBL-Invoice-2.1.xsd")
 XSD_CREDITNOTE = cesty.zdroj("schemas", "maindoc", "UBL-CreditNote-2.1.xsd")
 XSD_POHODA = cesty.zdroj("schemas", "pohoda", "invoice.xsd")
+XSD_TDD = cesty.zdroj("schemas", "tdd", "Peppol-SK-TDD.xsd")
+NS_TDD = "urn:peppol:schema:sk-taxdata:1.0"
 NS_POHODA_INV = "http://www.stormware.cz/schema/version_2/invoice.xsd"
 
 TOLERANCIA = Decimal("0.02")
@@ -225,3 +228,56 @@ def skontroluj_pohodu(xml: bytes) -> list[str]:
 
 def xsd_dostupne() -> bool:
     return XSD_INVOICE.exists()
+
+
+def skontroluj_tdd(xml: bytes) -> list[str]:
+    """Peppol SK TDD: XSD a fatalne pravidla ibr-tdd, ktore XSD nezachyti.
+
+    Obsah ReportedDocument vznika z UBL, ktore uz preslo obchodnymi pravidlami,
+    preto sa tu kontroluje hlavne hlavicka hlasenia.
+    """
+    root = etree.fromstring(xml)
+    ns = {**NS, "pxs": NS_TDD}
+
+    def text(cesta: str) -> str:
+        return (root.findtext(cesta, default="", namespaces=ns) or "").strip()
+
+    def schema(cesta: str) -> str:
+        prvok = root.find(cesta, ns)
+        return (prvok.get("schemeID") or "") if prvok is not None else ""
+
+    chyby: list[str] = []
+    if text("cbc:CustomizationID") != "urn:peppol:taxdata:sk-1":
+        chyby.append("ibr-tdd-01: CustomizationID musi byt urn:peppol:taxdata:sk-1.")
+    if text("cbc:ProfileID") != "urn:peppol:taxreporting":
+        chyby.append("ibr-tdd-02: ProfileID musi byt urn:peppol:taxreporting.")
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]\d{2}:\d{2})", text("cbc:IssueTime")):
+        chyby.append("ibr-tdd-05: IssueTime musi obsahovat casovu zonu.")
+    for cesta, povolene, kod in (
+        ("pxs:TaxDataTypeCode", {"S", "R", "D"}, "ibr-tdd-06"),
+        ("pxs:DocumentScope", {"D", "IC", "INTL"}, "ibr-tdd-08"),
+        ("pxs:ReporterRole", {"C2", "C3"}, "ibr-tdd-09"),
+    ):
+        if text(cesta) not in povolene:
+            chyby.append(f"{kod}: {cesta} ma hodnotu '{text(cesta)}', povolene su {', '.join(sorted(povolene))}.")
+    if not text("pxs:TaxAuthority/cbc:ID"):
+        chyby.append("ibr-tdd-13: chyba ID danoveho uradu, doplni sa v nastaveniach.")
+    if not text("pxs:ReportingParty/cbc:EndpointID") or not re.fullmatch(r"\d{4}", schema("pxs:ReportingParty/cbc:EndpointID")):
+        chyby.append("ibr-tdd-15/17: chyba Peppol ID hlasiacej strany alebo jeho EAS kod.")
+    if not text("pxs:ReceivingParty/cbc:EndpointID") or schema("pxs:ReceivingParty/cbc:EndpointID") != "0242":
+        chyby.append("ibr-tdd-19/20: chyba SPID prijemcu (Financna sprava), doplni sa v nastaveniach.")
+    cesta_zastupcu = "pxs:ReportersRepresentative/cac:PartyIdentification/cbc:ID"
+    if not text(cesta_zastupcu) or schema(cesta_zastupcu) != "0242":
+        chyby.append("ibr-tdd-22/23: chyba SPID reprezentanta (tvoj Access Point), doplni sa v nastaveniach.")
+    if not root.findall("pxs:ReportedTransaction/pxs:ReportedDocument/pxs:DocumentLine", ns):
+        chyby.append("BR-16: hlaseny doklad neobsahuje ani jeden riadok.")
+    # PEPPOL-EN16931-R008: ziadne prazdne elementy. Chybajuce SPID uz je hlasene vyssie.
+    if not chyby and any(len(e) == 0 and not (e.text or "").strip() for e in root.iter() if isinstance(e.tag, str)):
+        chyby.append("PEPPOL-R008: TDD obsahuje prazdny element.")
+
+    if XSD_TDD.exists():
+        with _ZAMOK_SCHEMY:
+            xsd = _schema(XSD_TDD)
+            if not xsd.validate(etree.ElementTree(root)):
+                chyby.extend(f"XSD: {chyba.message}" for chyba in xsd.error_log)
+    return chyby

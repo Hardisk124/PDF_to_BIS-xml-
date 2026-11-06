@@ -89,7 +89,7 @@ def vytvor_aplikaciu() -> FastAPI:
                 "nastavenia": ploche(cfg),
                 "chybajuce": cfg.chybajuce(),
                 "cesta_config": str(cesty.config()),
-                "cesta_vystup": f"{cesty.export('UBL')}, {cesty.export('POHODA')}",
+                "cesta_vystup": f"{cesty.KOREN_EXPORTU} (bis, tdd, pohoda)",
             }
         )
 
@@ -97,10 +97,11 @@ def vytvor_aplikaciu() -> FastAPI:
     async def zapis_nastavenia(udaje: dict, x_tajomstvo: str | None = Header(default=None)) -> JSONResponse:
         if not overene(x_tajomstvo):
             return JSONResponse({"chyba": "Neplatna poziadavka."}, status_code=403)
-        if udaje.get("vystup_ubl") is False and udaje.get("vystup_pohoda") is False:
-            return JSONResponse({"chyba": "Vyber aspon jeden vystupny format."}, status_code=400)
         # Formular neposiela vsetky polia, chybajuce sa preberu z ulozenych nastaveni.
-        novy = zo_slovnika({**ploche(nacitaj()), **udaje})
+        spolu = {**ploche(nacitaj()), **udaje}
+        if not any(spolu.get(k) for k in ("vystup_ubl", "vystup_tdd", "vystup_pohoda")):
+            return JSONResponse({"chyba": "Vyber aspon jeden vystupny format."}, status_code=400)
+        novy = zo_slovnika(spolu)
         uloz(novy)
         return JSONResponse({"ulozene": True, "chybajuce": novy.chybajuce()})
 
@@ -291,6 +292,7 @@ input[type=text],input[type=password],select{width:100%;font:inherit;padding:8px
       <legend>Vystupne formaty</legend>
       <div class="mriezka">
         <label class="volba"><input type="checkbox" id="vystup_ubl"> Peppol BIS 3 (UBL)</label>
+        <label class="volba"><input type="checkbox" id="vystup_tdd"> Peppol SK TDD (hlasenie pre FS)</label>
         <label class="volba"><input type="checkbox" id="vystup_pohoda"> POHODA XML</label>
       </div>
       <p class="napoveda">Aspon jeden format musi zostat zapnuty.</p>
@@ -300,16 +302,39 @@ input[type=text],input[type=password],select{width:100%;font:inherit;padding:8px
       <legend>Peppol identifikatory</legend>
       <div class="mriezka">
         <div><label for="moj_endpoint_id">Moj EndpointID</label>
-             <input type="text" id="moj_endpoint_id" placeholder="prazdne = IC DPH z faktury"></div>
+             <input type="text" id="moj_endpoint_id" placeholder="prazdne = podla EAS kodu z faktury"></div>
         <div><label for="moj_endpoint_scheme">Moj EAS kod</label>
-             <input type="text" id="moj_endpoint_scheme" placeholder="napr. 0158"></div>
+             <input type="text" id="moj_endpoint_scheme" placeholder="napr. 0245"></div>
         <div><label for="odberatel_endpoint_scheme">EAS kod odberatela</label>
              <input type="text" id="odberatel_endpoint_scheme" placeholder="napr. 0158"></div>
       </div>
       <p class="napoveda">Nazov firmy, ICO, IC DPH, adresa aj IBAN sa citaju priamo z faktury.
         Tu zostavaju len EAS kody, ktore na doklade nie su. Zoznam je na
         <a href="https://docs.peppol.eu/poacc/billing/3.0/codelist/eas/" target="_blank" rel="noreferrer">docs.peppol.eu</a>,
-        over si ich u svojho Access Pointu.</p>
+        over si ich u svojho Access Pointu. EndpointID sa vyberie podla EAS kodu:
+        0245 = DIC, 0158 = ICO, 9950 = IC DPH.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Peppol SK TDD (hlasenie pre Financnu spravu)</legend>
+      <div class="mriezka">
+        <div><label for="tdd_spid_prijemcu">SPID prijemcu (Financna sprava)</label>
+             <input type="text" id="tdd_spid_prijemcu" placeholder="schema 0242"></div>
+        <div><label for="tdd_spid_reprezentanta">SPID reprezentanta (moj Access Point)</label>
+             <input type="text" id="tdd_spid_reprezentanta" placeholder="schema 0242"></div>
+        <div><label for="tdd_rola">Rola hlasitela</label>
+          <select id="tdd_rola">
+            <option value="C2">C2, strana dodavatela</option>
+            <option value="C3">C3, strana odberatela</option>
+          </select></div>
+        <div><label for="tdd_urad_id">ID danoveho uradu</label>
+             <input type="text" id="tdd_urad_id" placeholder="SK-TAX"></div>
+        <div><label for="tdd_urad_nazov">Nazov danoveho uradu</label>
+             <input type="text" id="tdd_urad_nazov" placeholder="Financna sprava SR"></div>
+      </div>
+      <p class="napoveda">Hlasiaca strana je tvoj Peppol identifikator (EAS kod a EndpointID vyssie,
+        napr. 0245:2022389633). SPID oboch poskytovatelov ti da Access Point. Kym su prazdne,
+        TDD neprejde validaciou a pri striktnej validacii sa nezapise.</p>
     </fieldset>
 
     <fieldset>
@@ -344,7 +369,8 @@ const TAJOMSTVO = "__TAJOMSTVO__";
 const $ = id => document.getElementById(id);
 const POLIA = ["moj_endpoint_id","moj_endpoint_scheme","odberatel_endpoint_scheme",
                "kategoria_nulovej_dph","zaloha_referencie","mena",
-               "vystup_ubl","vystup_pohoda"];
+               "vystup_ubl","vystup_tdd","vystup_pohoda",
+               "tdd_spid_prijemcu","tdd_spid_reprezentanta","tdd_rola","tdd_urad_id","tdd_urad_nazov"];
 const hodnota = el => el.type === "checkbox" ? el.checked : el.value;
 let subory = [], relacia = null;
 
@@ -379,7 +405,7 @@ $("formular").onsubmit = async e => {
   e.preventDefault();
   const udaje = {};
   for (const p of POLIA) if ($(p)) udaje[p] = hodnota($(p));
-  if (!udaje.vystup_ubl && !udaje.vystup_pohoda){
+  if (!udaje.vystup_ubl && !udaje.vystup_tdd && !udaje.vystup_pohoda){
     $("stav-nastavenia").textContent = "Vyber aspon jeden vystupny format."; return;
   }
   const d = await (await fetch("/api/nastavenia", {
