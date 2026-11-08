@@ -1,4 +1,4 @@
-"""Spojenie krokov: PDF -> text -> extrakcia -> UBL, TDD a/alebo POHODA -> validacia -> zapis."""
+"""Spojenie krokov: PDF -> text -> extrakcia -> UBL a/alebo POHODA -> validacia -> zapis."""
 
 from __future__ import annotations
 
@@ -13,16 +13,12 @@ from . import cesty
 from .config import Config
 from .pohoda import do_pohody
 from .sablona import ChybaSablony, precitaj
-from .tdd import do_tdd
 from .ubl import ChybaPrevodu, do_ubl
-from .validate import (
-    XSD_INVOICE, XSD_POHODA, XSD_TDD, skontroluj, skontroluj_pohodu, skontroluj_tdd, skontroluj_xsd,
-)
+from .validate import XSD_INVOICE, XSD_POHODA, skontroluj, skontroluj_pohodu, skontroluj_xsd
 
 # Format: (nazov, prevod, kontrola, schema, pripona suboru)
 FORMATY = {
     "vystup_ubl": ("UBL", do_ubl, lambda xml: skontroluj(xml) + skontroluj_xsd(xml), XSD_INVOICE, ".xml"),
-    "vystup_tdd": ("TDD", do_tdd, skontroluj_tdd, XSD_TDD, "_tdd.xml"),
     "vystup_pohoda": ("POHODA", do_pohody, skontroluj_pohodu, XSD_POHODA, "_pohoda.xml"),
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stiahne UBL 2.1 XSD schemy od OASIS, schemy POHODA od Stormware a Peppol SK TDD do schemas/.
+"""Stiahne UBL 2.1 XSD schemy od OASIS a schemy POHODA od Stormware do priecinka schemas/.
 
 Bez nich bezi len kontrola obchodnych pravidiel. So schemami sa navyse overi,
 ze XML zodpoveda strukture UBL aj POHODA.
@@ -8,7 +8,6 @@ ze XML zodpoveda strukture UBL aj POHODA.
 from __future__ import annotations
 
 import io
-import re
 import sys
 import urllib.request
 import zipfile
@@ -22,9 +21,6 @@ LOKALNY = KOREN / "UBL-2.1.zip"
 # Schema faktury POHODA a vsetko, co importuje.
 ZDROJ_POHODA = "https://www.stormware.cz/schema/version_2/"
 SCHEMY_POHODA = ("invoice.xsd", "type.xsd", "documentresponse.xsd", "print.xsd", "filter.xsd")
-# Peppol SK Tax Data Document 1.0.0, oficialny balik od OpenPeppol.
-ZDROJ_TDD = "https://docs.peppol.eu/tdd/sk/tdd-sk/resources.zip"
-XSD_TDD_V_ARCHIVE = "trn-tdd/xsd/Peppol-Slovak Republic-TDD.xsd"
 
 
 def stiahni_pohodu() -> int:
@@ -39,29 +35,6 @@ def stiahni_pohodu() -> int:
             print(f"Stiahnutie zlyhalo: {chyba}", file=sys.stderr)
             return 1
     print(f"Hotovo, {len(SCHEMY_POHODA)} schem POHODA v {ciel}.")
-    return 0
-
-
-def stiahni_tdd() -> int:
-    """TDD schema importuje UBL komponenty z webu OASIS, presmeruju sa na lokalne schemas/common."""
-    print(f"Stahujem {ZDROJ_TDD} ...")
-    try:
-        with urllib.request.urlopen(ZDROJ_TDD, timeout=120) as odpoved:
-            data = odpoved.read()
-        with zipfile.ZipFile(io.BytesIO(data)) as archiv:
-            xsd = archiv.read(XSD_TDD_V_ARCHIVE).decode("utf-8")
-    except Exception as chyba:
-        print(f"Stiahnutie zlyhalo: {chyba}", file=sys.stderr)
-        return 1
-    xsd = re.sub(r'schemaLocation="https?://[^"]*/(UBL-[^"/]+\.xsd)"', r'schemaLocation="../common/\1"', xsd)
-    if re.search(r'schemaLocation="https?://', xsd):
-        # Validacia by inak pri kazdom spusteni siahala na web, alebo by offline zlyhala.
-        print("TDD schema odkazuje na nezname vzdialene schemy, uprav stiahni_tdd().", file=sys.stderr)
-        return 1
-    ciel = CIEL / "tdd"
-    ciel.mkdir(parents=True, exist_ok=True)
-    (ciel / "Peppol-SK-TDD.xsd").write_text(xsd, encoding="utf-8")
-    print(f"Hotovo, TDD schema v {ciel}.")
     return 0
 
 
@@ -98,7 +71,7 @@ def main() -> int:
             pocet += 1
 
     print(f"Hotovo, {pocet} schem v {CIEL}.")
-    return max(stiahni_pohodu(), stiahni_tdd())
+    return stiahni_pohodu()
 
 
 if __name__ == "__main__":

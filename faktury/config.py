@@ -32,13 +32,6 @@ class Peppol:
     moj_endpoint_id: str = ""        # prazdne znamena vybrat podla EAS kodu (0245 = DIC)
     moj_endpoint_scheme: str = ""
     odberatel_endpoint_scheme: str = ""
-    # Peppol SK Tax Data Document (hlasenie pre Financnu spravu).
-    # SPID su identifikatory poskytovatelov sluzieb Peppol (schema 0242), pride ich Access Point.
-    tdd_spid_prijemcu: str = ""        # SPID Financnej spravy, ReceivingParty
-    tdd_spid_reprezentanta: str = ""   # SPID mojho Access Pointu, ReportersRepresentative
-    tdd_urad_id: str = "SK-TAX"
-    tdd_urad_nazov: str = "Financna sprava SR"
-    tdd_rola: str = "C2"               # C2 = hlasi strana dodavatela, C3 = strana odberatela
 
 
 @dataclass(frozen=True)
@@ -56,7 +49,6 @@ class Nastavenia:
     # Ktore XML vytvarat. Aspon jeden format musi zostat zapnuty.
     vystup_ubl: bool = True
     vystup_pohoda: bool = True
-    vystup_tdd: bool = False
 
 
 @dataclass(frozen=True)
@@ -71,16 +63,11 @@ class Config:
         chyba = []
         if self.problem:
             chyba.append(self.problem)
-        # EAS kody potrebuje len Peppol (BIS aj TDD), POHODA ich nepouziva.
-        peppol = self.nastavenia.vystup_ubl or self.nastavenia.vystup_tdd
-        if peppol and not self.peppol.moj_endpoint_scheme:
+        # EAS kody potrebuje len Peppol, POHODA ich nepouziva.
+        if self.nastavenia.vystup_ubl and not self.peppol.moj_endpoint_scheme:
             chyba.append("EAS kod tvojej firmy")
-        if peppol and not self.peppol.odberatel_endpoint_scheme:
+        if self.nastavenia.vystup_ubl and not self.peppol.odberatel_endpoint_scheme:
             chyba.append("EAS kod odberatela")
-        if self.nastavenia.vystup_tdd and not self.peppol.tdd_spid_prijemcu:
-            chyba.append("SPID prijemcu TDD (Financna sprava)")
-        if self.nastavenia.vystup_tdd and not self.peppol.tdd_spid_reprezentanta:
-            chyba.append("SPID reprezentanta TDD (tvoj Access Point)")
         return chyba
 
 
@@ -153,18 +140,11 @@ def zo_slovnika(udaje: dict) -> Config:
     kategoria = txt("kategoria_nulovej_dph", "AE").upper()
     vystup_ubl = bool(udaje.get("vystup_ubl", True))
     vystup_pohoda = bool(udaje.get("vystup_pohoda", True))
-    vystup_tdd = bool(udaje.get("vystup_tdd", False))
-    rola = txt("tdd_rola", "C2").upper()
     return Config(
         peppol=Peppol(
             moj_endpoint_id=txt("moj_endpoint_id"),
             moj_endpoint_scheme=txt("moj_endpoint_scheme"),
             odberatel_endpoint_scheme=txt("odberatel_endpoint_scheme"),
-            tdd_spid_prijemcu=txt("tdd_spid_prijemcu"),
-            tdd_spid_reprezentanta=txt("tdd_spid_reprezentanta"),
-            tdd_urad_id=txt("tdd_urad_id", "SK-TAX") or "SK-TAX",
-            tdd_urad_nazov=txt("tdd_urad_nazov", "Financna sprava SR"),
-            tdd_rola=rola if rola in ("C2", "C3") else "C2",
         ),
         nastavenia=Nastavenia(
             mena=txt("mena", "EUR").upper() or "EUR",
@@ -172,8 +152,7 @@ def zo_slovnika(udaje: dict) -> Config:
             zaloha_referencie=txt("zaloha_referencie", "cislo_faktury"),
             striktna_validacia=bool(udaje.get("striktna_validacia", True)),
             # Bez formatu by sa nic nevytvorilo, preto vtedy ostava zapnuty UBL.
-            vystup_ubl=vystup_ubl or not (vystup_pohoda or vystup_tdd),
+            vystup_ubl=vystup_ubl or not vystup_pohoda,
             vystup_pohoda=vystup_pohoda,
-            vystup_tdd=vystup_tdd,
         ),
     )

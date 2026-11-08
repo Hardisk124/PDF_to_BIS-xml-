@@ -73,7 +73,7 @@ def main() -> int:
         f"\nHotovo. OK {pocty['ok']}, s upozornenim {pocty['s upozornenim']}, "
         f"neplatnych {pocty['neplatne']}, chybnych {pocty['chyba']}."
     )
-    print(f"XML v {cesty.KOREN_EXPORTU} (bis, tdd, pohoda), protokoly v {args.chyby}, suhrn v {suhrn}.")
+    print(f"XML v {cesty.export('UBL')} a {cesty.export('POHODA')}, protokoly v {args.chyby}, suhrn v {suhrn}.")
 
     return 1 if pocty["chyba"] else 0
 

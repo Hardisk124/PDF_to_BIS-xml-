@@ -8,10 +8,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from faktury.config import Config, Nastavenia, Peppol
-from faktury.ubl import cislo, d_cena, datum, do_ubl, kod_jednotky, kod_krajiny, kod_uhrady
+from lxml import etree
+
+from faktury.ubl import (
+    NS_CAC, NS_CBC, Firma, cislo, d_cena, datum, do_ubl, endpoint_podla_schemy, kod_jednotky, kod_krajiny, kod_uhrady,
+)
 from faktury.validate import skontroluj, skontroluj_xsd, xsd_dostupne
 from faktury.ubl import ChybaPrevodu
 from testy.vzorka import VSETKY
+
+NS = {"cac": NS_CAC, "cbc": NS_CBC}
 
 # Tieto vzorky musia prevod zastavit, nie prejst.
 MUSIA_ZLYHAT = {"zaloha_a_nesedi_sucet": "sa nezhoduje so zakladom dane"}
@@ -62,14 +68,56 @@ def test_normalizacia() -> list[str]:
     return chyby
 
 
+def test_endpoint() -> list[str]:
+    """EndpointID podla EAS kodu: 0245 = DIC bez SK, 0158 = ICO, 9950 = IC DPH."""
+    firma = Firma(ico="36787965", dic="2022389633", ic_dph="SK2022389633")
+    chyby = []
+    for schema, ocakavane in (("0245", "2022389633"), ("0158", "36787965"), ("9950", "SK2022389633"), ("", "SK2022389633")):
+        if endpoint_podla_schemy(firma, schema) != ocakavane:
+            chyby.append(f"endpoint pre {schema!r} = {endpoint_podla_schemy(firma, schema)}, ocakavane {ocakavane}")
+    return chyby
+
+
+def test_bis_851() -> list[str]:
+    """Skutocna faktura 851 podla vzoru V260837A.xml: EndpointID, ICO 0158, zapis v OR, variabilny symbol."""
+    pdf = Path(__file__).resolve().parent.parent / "vstup" / "851.pdf"
+    if not pdf.exists():
+        print("   vstup/851.pdf chyba, preskakuje sa")
+        return []
+    from faktury.sablona import precitaj
+
+    # Rucne zadany EndpointID s predponou SK sa pri 0245 musi orezat na DIC.
+    cfg = Config(peppol=Peppol(moj_endpoint_id="SK2022389633", moj_endpoint_scheme="0245",
+                               odberatel_endpoint_scheme="0158"), nastavenia=Nastavenia())
+    xml = do_ubl(precitaj(pdf), cfg).xml
+    chyby = [f"851.pdf: {c}" for c in skontroluj(xml) + skontroluj_xsd(xml)]
+    bis = etree.fromstring(xml)
+    for strana, ocakavane in (("Supplier", ("0245", "2022389633")), ("Customer", ("0158", "31686184"))):
+        e = bis.find(f"cac:Accounting{strana}Party/cac:Party/cbc:EndpointID", NS)
+        if (e.get("schemeID"), e.text) != ocakavane:
+            chyby.append(f"851.pdf: EndpointID {strana} je {e.get('schemeID')}:{e.text}, ocakavane {ocakavane}")
+    ico = bis.findall(".//cac:PartyIdentification/cbc:ID", NS) + bis.findall(".//cac:PartyLegalEntity/cbc:CompanyID", NS)
+    if len(ico) != 4 or any(e.get("schemeID") != "0158" for e in ico):
+        chyby.append(f"851.pdf: ICO bez schemeID 0158: {[(e.text, e.get('schemeID')) for e in ico]}")
+    forma = bis.findtext("cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:CompanyLegalForm", namespaces=NS)
+    if not (forma or "").startswith("Register u OR"):
+        chyby.append(f"851.pdf: chyba CompanyLegalForm dodavatela, je {forma!r}")
+    if bis.find("cac:AccountingCustomerParty//cbc:CompanyLegalForm", NS) is not None:
+        chyby.append("851.pdf: odberatel nema mat CompanyLegalForm")
+    if bis.findtext("cac:PaymentMeans/cbc:PaymentID", namespaces=NS) != "260851":
+        chyby.append(f"851.pdf: PaymentID je {bis.findtext('cac:PaymentMeans/cbc:PaymentID', namespaces=NS)}")
+    return chyby
+
+
 def main() -> int:
     zlyhalo = 0
 
-    chyby = test_normalizacia()
-    print("normalizacia:", "OK" if not chyby else "ZLYHALO")
-    for c in chyby:
-        print("   ", c)
-    zlyhalo += len(chyby)
+    for test in (test_normalizacia, test_endpoint, test_bis_851):
+        chyby = test()
+        print(f"{test.__name__}:", "OK" if not chyby else "ZLYHALO")
+        for c in chyby:
+            print("   ", c)
+        zlyhalo += len(chyby)
 
     vystup = Path(__file__).resolve().parent / "vystup"
     vystup.mkdir(exist_ok=True)
