@@ -85,6 +85,7 @@ class Firma:
     email: str = ""
     telefon: str = ""
     endpoint_id: str = ""
+    pravna_forma: str = ""
 
 
 class ChybaPrevodu(ValueError):
@@ -206,6 +207,11 @@ def ocisti_ic_dph(hodnota: str | None, krajina: str | None) -> str | None:
     return text
 
 
+def variabilny_symbol(cislo_faktury: str | None) -> str | None:
+    """V26/0687 -> 260687. Rovnaky pre Peppol PaymentID aj POHODA symVar."""
+    return re.sub(r"\D", "", cislo_faktury or "")[:20] or None
+
+
 def ocisti_iban(hodnota: str | None) -> str | None:
     if not hodnota:
         return None
@@ -268,12 +274,14 @@ def firma_zo_strany(strana: Strana, inak_krajina: str = "SK") -> Firma:
         krajina=krajina,
         email=(strana.email or "").strip(),
         telefon=(strana.telefon or "").strip(),
+        pravna_forma=(strana.pravna_forma or "").strip(),
     )
 
 
 # EAS kod urcuje, ktory identifikator strany patri do EndpointID. Hodnota musi
 # zodpovedat scheme, inak Access Point doruci doklad na neexistujucu adresu.
 ENDPOINT_PODLA_SCHEMY = {"0245": "dic", "0158": "ico", "9950": "ic_dph"}
+SCHEMA_ICO = "0158"
 
 
 def endpoint_podla_schemy(firma: Firma, schema: str) -> str:
@@ -293,9 +301,11 @@ def _zapis_stranu(rodic, firma: Firma, endpoint_scheme: str) -> None:
     if endpoint:
         cbc(party, "EndpointID", endpoint, schemeID=endpoint_scheme or None)
 
+    # ICO je slovensky identifikator, schema 0158 patri len slovenskej firme.
+    schema_ico = SCHEMA_ICO if firma.krajina == "SK" else None
     if firma.ico:
         ident = cac(party, "PartyIdentification")
-        cbc(ident, "ID", firma.ico)
+        cbc(ident, "ID", firma.ico, schemeID=schema_ico)
 
     if firma.nazov:
         meno = cac(party, "PartyName")
@@ -320,7 +330,9 @@ def _zapis_stranu(rodic, firma: Firma, endpoint_scheme: str) -> None:
     pravna = cac(party, "PartyLegalEntity")
     cbc(pravna, "RegistrationName", firma.nazov or "Neuvedene")
     if firma.ico:
-        cbc(pravna, "CompanyID", firma.ico)
+        cbc(pravna, "CompanyID", firma.ico, schemeID=schema_ico)
+    if firma.pravna_forma:
+        cbc(pravna, "CompanyLegalForm", firma.pravna_forma)
 
     if firma.email or firma.telefon:
         kontakt = cac(party, "Contact")
@@ -454,9 +466,12 @@ def do_ubl(faktura: Faktura, cfg: Config) -> Vysledok:
     mena = (faktura.mena or nast.mena or "EUR").strip().upper()[:3]
 
     dodavatel = firma_zo_strany(faktura.dodavatel)
+    moj_endpoint = cfg.peppol.moj_endpoint_id
+    if moj_endpoint and cfg.peppol.moj_endpoint_scheme.strip() == "0245":
+        moj_endpoint = re.sub(r"\D", "", moj_endpoint)  # DIC je bez predpony SK, aj ked ho niekto zada s nou
     dodavatel = replace(
         dodavatel,
-        endpoint_id=cfg.peppol.moj_endpoint_id or endpoint_podla_schemy(dodavatel, cfg.peppol.moj_endpoint_scheme),
+        endpoint_id=moj_endpoint or endpoint_podla_schemy(dodavatel, cfg.peppol.moj_endpoint_scheme),
     )
 
     odberatel = firma_zo_strany(faktura.odberatel)
@@ -568,8 +583,10 @@ def do_ubl(faktura: Faktura, cfg: Config) -> Vysledok:
         )
     prostriedok = cac(root, "PaymentMeans")
     cbc(prostriedok, "PaymentMeansCode", kod)
-    if faktura.variabilny_symbol:
-        cbc(prostriedok, "PaymentID", faktura.variabilny_symbol.strip())
+    # Variabilny symbol je vzdy cislo faktury bez pismen a lomitok (V26/0837 -> 260837).
+    vs = variabilny_symbol(faktura.cislo_faktury) or (faktura.variabilny_symbol or "").strip()
+    if vs:
+        cbc(prostriedok, "PaymentID", vs)
     if iban:
         ucet = cac(prostriedok, "PayeeFinancialAccount")
         cbc(ucet, "ID", iban)

@@ -66,7 +66,7 @@ alebo u svojho Access Pointu. Hodnoty v priloženom `config.toml` sú len zástu
 **Výstupné formáty.** Peppol UBL ide do `FAKTURA.xml`, TDD do `FAKTURA_tdd.xml`, POHODA do
 `FAKTURA_pohoda.xml`. Aspoň jeden musí zostať zapnutý. EAS kódy potrebuje len Peppol (BIS aj TDD).
 
-**EndpointID sa vyberá podľa EAS kódu.** `0245` je DIČ (bez `SK`), `0158` IČO, `9950` IČ DPH.
+**EndpointID sa vyberá podľa EAS kódu.** IČO má vždy `schemeID="0158"`, variabilný symbol (`PaymentID`) je číslo faktúry bez písmen a lomiek (`V26/0837` → `260837`) a dodávateľ má zápis v OR (`CompanyLegalForm`). `0245` je DIČ (bez `SK`), `0158` IČO, `9950` IČ DPH.
 Napríklad EAS `0245` dá Peppol ID `0245:2022389633`. Pole *Môj EndpointID* hodnotu z faktúry prepíše.
 
 **Peppol SK TDD** je hlásenie faktúry pre Finančnú správu podľa
@@ -89,7 +89,7 @@ určí z krajín: rovnaká krajina je `D`, odberateľ v EÚ `IC`, inak `INTL`.
   faktúra dostane upozornenie, lebo to znamená, že sa niečo prečítalo zle.
 - Variabilný symbol sú číslice z čísla faktúry (`V26/0687` → `260687`).
 - DPH sa počíta po položkách ako v POHODE, môže sa preto od PDF líšiť o zaokrúhlenie v centoch.
-- Kontakt dodávateľa (telefón, e-mail, web) sa z PDF nečíta,
+- Kontakt dodávateľa (telefón, e-mail, web) a zápis v obchodnom registri sa z PDF nečítajú,
   je natvrdo v `KONTAKT_DODAVATELA` vo `faktury/sablona.py`.
 - Predkontácia je pre všetky faktúry `602001_Prepr` (konštanta `PREDKONTACIA` vo `faktury/pohoda.py`).
 - Text položky má v POHODE najviac 90 znakov, zvyšok popisu ide do poznámky položky.

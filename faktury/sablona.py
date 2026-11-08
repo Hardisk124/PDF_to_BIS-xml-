@@ -53,11 +53,12 @@ RIADKOV_DODAVATELA = 8
 # Identifikatory odberatela zacinaju vlavo od jeho adresneho bloku.
 X_ODBERATEL_ID_OD = X_ODBERATEL_OD - 100.0
 
-# Kontakt dodavatela sa z faktury necita, je vzdy rovnaky.
+# Kontakt a zapis v obchodnom registri dodavatela sa z faktury necitaju, su vzdy rovnake.
 KONTAKT_DODAVATELA = {
     "telefon": "+421918067976",
     "email": "info@grimmel.sk",
     "web": "www.grimmel.sk",
+    "pravna_forma": "Register u OR Okresného súdu Trenčín, oddiel Sro, vl. č.: 17893/R",
 }
 
 TOLERANCIA_RIADKU = 4.0   # o kolko bodov sa smu lisit slova v tom istom riadku

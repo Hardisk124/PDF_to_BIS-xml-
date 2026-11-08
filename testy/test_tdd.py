@@ -106,6 +106,18 @@ def test_pdf_851() -> list[str]:
     odberatel = etree.fromstring(ubl).find("cac:AccountingCustomerParty/cac:Party/cbc:EndpointID", NS)
     if (odberatel.get("schemeID"), odberatel.text) != ("0158", "31686184"):
         chyby.append(f"851.pdf: EndpointID odberatela v BIS je {odberatel.get('schemeID')}:{odberatel.text}")
+    # Povinne polia BIS podla vzoru V260837A.xml: ICO so schemou 0158, zapis v OR, variabilny symbol.
+    bis = etree.fromstring(ubl)
+    ico = bis.findall(".//cac:PartyIdentification/cbc:ID", NS) + bis.findall(".//cac:PartyLegalEntity/cbc:CompanyID", NS)
+    if len(ico) != 4 or any(e.get("schemeID") != "0158" for e in ico):
+        chyby.append(f"851.pdf: ICO bez schemeID 0158: {[(e.text, e.get('schemeID')) for e in ico]}")
+    forma = bis.findtext("cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:CompanyLegalForm", namespaces=NS)
+    if not (forma or "").startswith("Register u OR"):
+        chyby.append(f"851.pdf: chyba CompanyLegalForm dodavatela, je {forma!r}")
+    if bis.find("cac:AccountingCustomerParty//cbc:CompanyLegalForm", NS) is not None:
+        chyby.append("851.pdf: odberatel nema mat CompanyLegalForm")
+    if bis.findtext("cac:PaymentMeans/cbc:PaymentID", namespaces=NS) != "260851":
+        chyby.append(f"851.pdf: PaymentID je {bis.findtext('cac:PaymentMeans/cbc:PaymentID', namespaces=NS)}")
     return chyby
 
 

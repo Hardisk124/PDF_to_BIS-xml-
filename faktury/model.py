@@ -42,6 +42,9 @@ class Strana(BaseModel):
     email: Optional[str] = Field(description="Kontaktny e-mail.")
     telefon: Optional[str] = Field(description="Kontaktny telefon.")
     web: Optional[str] = Field(description="Webova stranka.")
+    pravna_forma: Optional[str] = Field(
+        default=None, description="Zapis v obchodnom registri (BT-33). Na fakture nie je, doplna sa natvrdo."
+    )
 
 
 class Riadok(BaseModel):

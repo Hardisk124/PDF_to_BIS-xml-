@@ -14,7 +14,7 @@ from lxml import etree
 
 from .config import Config
 from .model import Faktura, Strana
-from .ubl import NULA, ChybaPrevodu, Vysledok, cislo, d2, d4, datum, kod_uhrady, percento, skontroluj_sucet, zaokruhli
+from .ubl import NULA, ChybaPrevodu, Vysledok, cislo, d2, d4, datum, kod_uhrady, percento, skontroluj_sucet, variabilny_symbol, zaokruhli
 
 NS_DAT = "http://www.stormware.cz/schema/version_2/data.xsd"
 NS_INV = "http://www.stormware.cz/schema/version_2/invoice.xsd"
@@ -50,11 +50,6 @@ def typ(rodic, nazov, text=None, **atributy):
 
 def _ids(rodic, nazov: str, hodnota: str) -> None:
     typ(inv(rodic, nazov), "ids", hodnota)
-
-
-def variabilny_symbol(cislo_faktury: str | None) -> str | None:
-    """V26/0687 -> 260687."""
-    return re.sub(r"\D", "", cislo_faktury or "")[:20] or None
 
 
 def psc(hodnota: str | None) -> str | None:
